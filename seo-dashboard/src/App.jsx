@@ -1,0 +1,88 @@
+import { useState } from 'react';
+import Sidebar from './components/layout/Sidebar';
+import Topbar from './components/layout/Topbar';
+import HomePage from './components/pages/HomePage';
+import DashboardPage from './components/pages/DashboardPage';
+import PositionAnalysisPage from './components/pages/PositionAnalysisPage';
+import KeywordsPage from './components/pages/KeywordsPage';
+import TopPagesPage from './components/pages/TopPagesPage';
+import AIVisibilityPage from './components/pages/AIVisibilityPage';
+import ContentEnginePage from './components/pages/ContentEnginePage';
+import PlaceholderPage from './components/pages/PlaceholderPage';
+
+const PAGE_TITLES = {
+  'home': { title: 'Home', subtitle: 'Your SEO workspace overview' },
+  'dashboard': { title: 'Dashboard', subtitle: 'cognitute.org · India · Google · Jun 15–22, 2026' },
+  'search-visibility': { title: 'Search Visibility', subtitle: 'Overview of your search performance' },
+  'search-visibility/position-analysis': { title: 'Position Tracking', subtitle: 'cognitute.org · India · Google · 1,053 keywords' },
+  'search-visibility/keywords': { title: 'Keywords', subtitle: '1,053 tracked keywords' },
+  'search-visibility/top-pages': { title: 'Top Pages', subtitle: 'Best performing pages by organic traffic' },
+  'search-visibility/sales-pipeline': { title: 'Sales Pipeline', subtitle: 'Track keyword-to-conversion funnel' },
+  'search-visibility/link-outreach': { title: 'Link Outreach', subtitle: 'Manage backlink acquisition campaigns' },
+  'search-visibility/off-page-scheduler': { title: 'Off-Page Scheduler', subtitle: 'Schedule off-page SEO activities' },
+  'search-visibility/on-page': { title: 'On-Page Optimization', subtitle: 'On-page SEO recommendations' },
+  'search-visibility/competitors': { title: 'Competitors', subtitle: 'Competitor SEO intelligence' },
+  'search-visibility/keyword-research': { title: 'Keyword Research', subtitle: 'Discover new keyword opportunities' },
+  'search-visibility/keywords-clustering': { title: 'Keywords Clustering', subtitle: 'Group keywords by topic and intent' },
+  'search-visibility/page-mapping': { title: 'Page Mapping', subtitle: 'Map keywords to landing pages' },
+  'search-visibility/outreach': { title: 'Outreach', subtitle: 'Manage link building outreach' },
+  'search-visibility/domain-setup': { title: 'Domain Setup', subtitle: 'Configure tracked domains' },
+  'search-visibility/competitor-setup': { title: 'Competitor Setup', subtitle: 'Add and manage competitors' },
+  'search-visibility/search/overview': { title: 'Search Overview', subtitle: 'High-level search performance summary' },
+  'search-visibility/search/predictive-analysis': { title: 'Predictive Analysis', subtitle: 'AI-powered rank predictions' },
+  'search-visibility/search/domain-overview': { title: 'Domain Overview', subtitle: 'Full domain search metrics' },
+  'search-visibility/search/site-health': { title: 'Site Health', subtitle: 'Technical SEO audit' },
+  'ai-visibility': { title: 'AI Visibility', subtitle: 'Brand presence in AI-powered search' },
+  'ai-visibility/overview': { title: 'AI Visibility Overview', subtitle: 'How AI engines see your brand' },
+  'ai-visibility/brand-performance': { title: 'Brand Performance', subtitle: 'Brand mention analytics' },
+  'ai-visibility/prompt-research': { title: 'Prompt Research', subtitle: 'Discover prompts where you should appear' },
+  'ai-visibility/content-builder': { title: 'Content Builder', subtitle: 'Create AI-optimized content' },
+  'ai-visibility/competitor-insights': { title: 'Competitor Insights', subtitle: 'How competitors appear in AI responses' },
+  'content-engine': { title: 'Content Engine', subtitle: 'Content planning, trends, and calendar' },
+  'content-engine/top-blogs': { title: 'Top Blogs', subtitle: 'Best performing blog posts' },
+  'content-engine/search/trend-spotting': { title: 'Trend Spotting', subtitle: 'Rising search topics in your niche' },
+  'content-engine/search/calendar-builder': { title: 'Calendar Builder', subtitle: 'Plan content around search trends' },
+  'content-engine/search/calendar': { title: 'Content Calendar', subtitle: 'Scheduled and published content' },
+  'content-engine/social/trend-spotting': { title: 'Social Trend Spotting', subtitle: 'Rising topics on social media' },
+  'content-engine/social/calendar-builder': { title: 'Social Calendar Builder', subtitle: 'Plan social media content' },
+  'content-engine/social/calendar': { title: 'Social Calendar', subtitle: 'Scheduled social media posts' },
+  'content-engine/workflow-setup': { title: 'Workflow Setup', subtitle: 'Configure content workflows' },
+  'content-engine/brand-setup': { title: 'Brand Setup', subtitle: 'Set brand voice and guidelines' },
+};
+
+function renderPage(path, onNavigate) {
+  switch (path) {
+    case 'home': return <HomePage onNavigate={onNavigate} />;
+    case 'dashboard': return <DashboardPage />;
+    case 'search-visibility/position-analysis': return <PositionAnalysisPage />;
+    case 'search-visibility/keywords': return <KeywordsPage />;
+    case 'search-visibility/top-pages': return <TopPagesPage />;
+    case 'ai-visibility':
+    case 'ai-visibility/overview':
+    case 'ai-visibility/brand-performance':
+    case 'ai-visibility/competitor-insights': return <AIVisibilityPage />;
+    case 'content-engine': return <ContentEnginePage />;
+    default: {
+      const info = PAGE_TITLES[path];
+      return <PlaceholderPage title={info?.title || path} />;
+    }
+  }
+}
+
+export default function App() {
+  const [activePath, setActivePath] = useState('home');
+
+  const pageInfo = PAGE_TITLES[activePath] || { title: activePath, subtitle: '' };
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar activePath={activePath} onNavigate={setActivePath} />
+      <div style={{ marginLeft: 'var(--sidebar-w)', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Topbar title={pageInfo.title} subtitle={pageInfo.subtitle} />
+        <main style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+          {renderPage(activePath, setActivePath)}
+        </main>
+      </div>
+    </div>
+  );
+}
