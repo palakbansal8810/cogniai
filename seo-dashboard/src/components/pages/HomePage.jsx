@@ -1,5 +1,6 @@
 import { Card } from '../ui/Card';
 import { Search, Sparkles, FileText, TrendingUp, ArrowRight } from 'lucide-react';
+import { totalKeywordCount, brandMentionKeywords, brandMentions, clusterDistribution } from '../../data/mockData';
 
 const modules = [
   {
@@ -9,7 +10,11 @@ const modules = [
     desc: 'Track keyword positions, analyze competitors, and manage link building campaigns.',
     color: '#e74c6f',
     bg: '#fdeef2',
-    stats: [{ label: 'Keywords', value: '1,053' }, { label: 'Avg Position', value: '86.4' }, { label: 'Top 10', value: '39' }],
+    stats: [
+      { label: 'Keywords', value: totalKeywordCount.toLocaleString() },
+      { label: 'Clusters', value: String(clusterDistribution.length) },
+      { label: 'Geo', value: 'Singapore' },
+    ],
   },
   {
     id: 'ai-visibility',
@@ -18,7 +23,11 @@ const modules = [
     desc: 'Monitor how your brand appears across AI-powered search engines and chatbots.',
     color: '#d4a017',
     bg: '#fef9e4',
-    stats: [{ label: 'AI Score', value: '14/100' }, { label: 'Mentions', value: '6' }, { label: 'Sentiment', value: 'Positive' }],
+    stats: [
+      { label: 'Tracked KWs', value: String(brandMentionKeywords.length) },
+      { label: 'Citations', value: String(brandMentions.length) },
+      { label: 'Sources', value: '3' },
+    ],
   },
   {
     id: 'content-engine',
@@ -41,7 +50,7 @@ export default function HomePage({ onNavigate }) {
           Welcome back.<br />Here's what's happening.
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', maxWidth: 500, lineHeight: 1.6 }}>
-          Your domain <strong style={{ color: 'var(--accent)' }}>cognitute.org</strong> has 1,053 tracked keywords across India · Google. Visibility is slightly down this week — time to act.
+          Tracking <strong style={{ color: 'var(--accent)' }}>{totalKeywordCount.toLocaleString()} keywords</strong> across {clusterDistribution.length} clusters for Singapore · Google, with {brandMentions.length} brand mention citations monitored.
         </p>
       </div>
 
@@ -49,7 +58,7 @@ export default function HomePage({ onNavigate }) {
       <div style={{ background: '#fff3cd', border: '1px solid #f59e0b44', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
         <TrendingUp size={16} color="#d97706" />
         <span style={{ fontSize: 13, color: '#92400e', fontWeight: 500 }}>
-          Visibility dropped 0.45% this week. 103 keywords lost positions — <button onClick={() => onNavigate('search-visibility/position-analysis')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13, textDecoration: 'underline', padding: 0 }}>view Position Analysis →</button>
+          {brandMentionKeywords.length} keywords tracked for brand mentions — <button onClick={() => onNavigate('ai-visibility/overview')} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: 13, textDecoration: 'underline', padding: 0 }}>view AI Visibility →</button>
         </span>
       </div>
 
@@ -90,7 +99,7 @@ export default function HomePage({ onNavigate }) {
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, marginBottom: 12 }}>Quick Actions</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
-              ['Add keywords to track', 'search-visibility/keywords'],
+              ['View all keywords', 'search-visibility/keywords'],
               ['Run keyword research', 'search-visibility/keyword-research'],
               ['Schedule content', 'content-engine/search/calendar-builder'],
               ['Check AI mentions', 'ai-visibility/overview'],
@@ -105,24 +114,16 @@ export default function HomePage({ onNavigate }) {
           </div>
         </Card>
         <Card style={{ padding: '16px 20px' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Domain Setup</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Your current tracked domains and health status</div>
-          {[
-            { domain: 'cognitute.org', health: 82, status: 'active' },
-            { domain: 'chaithanya.com', health: 88, status: 'active' },
-          ].map(d => (
-            <div key={d.domain} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{d.domain}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 50, height: 4, background: 'var(--border)', borderRadius: 99 }}>
-                  <div style={{ width: `${d.health}%`, height: '100%', borderRadius: 99, background: d.health >= 85 ? 'var(--green)' : 'var(--amber)' }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: d.health >= 85 ? 'var(--green)' : 'var(--amber)' }}>{d.health}%</span>
-              </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Top Clusters</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>Keyword clusters by volume of keywords</div>
+          {clusterDistribution.slice(0, 5).map((d, i) => (
+            <div key={d.cluster} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--border)' : 'none' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{d.cluster}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>{d.count} keywords</span>
             </div>
           ))}
-          <button onClick={() => onNavigate('search-visibility/domain-setup')} style={{ marginTop: 12, width: '100%', fontSize: 12.5, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '7px', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
-            Manage Domains
+          <button onClick={() => onNavigate('search-visibility/keywords-clustering')} style={{ marginTop: 12, width: '100%', fontSize: 12.5, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '7px', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
+            View All Clusters
           </button>
         </Card>
       </div>

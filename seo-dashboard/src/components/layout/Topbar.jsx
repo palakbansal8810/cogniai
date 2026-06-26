@@ -26,19 +26,6 @@ export default function Topbar({ title, subtitle, dateRange }) {
           <input placeholder="Search..." style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-body)', width: '100%' }} />
         </div>
 
-        {/* Date range */}
-        <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '6px 12px', cursor: 'pointer', fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-body)', fontWeight: 500 }}>
-          <Calendar size={13} />
-          {dateRange || 'Jun 15–22, 2026'}
-          <ChevronDown size={12} />
-        </button>
-
-        {/* Export */}
-        <button style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--accent)', border: 'none', borderRadius: 'var(--radius-sm)', padding: '6px 14px', cursor: 'pointer', fontSize: 12.5, color: '#fff', fontFamily: 'var(--font-body)', fontWeight: 600 }}>
-          <Download size={13} />
-          Export
-        </button>
-
         {/* Avatar */}
         <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 12, color: '#fff', cursor: 'pointer' }}>
           C

@@ -1,10 +1,18 @@
 import { Card, CardHeader, MetricCard, Badge, Table } from '../ui/Card';
-import { SparkLine, BarChartComp, LineChartComp } from '../ui/MiniChart';
-import { visibilityData, trafficData, positionData, topKeywords, rankingsDistribution } from '../../data/mockData';
+import { SparkLine } from '../ui/MiniChart';
+import { visibilityData, trafficData, positionData, topKeywords, rankingsDistribution, totalKeywordCount } from '../../data/mockData';
 import { Filter, ArrowUpDown } from 'lucide-react';
 
+function getIntentVariant(intent) {
+  const lower = intent.toLowerCase();
+  if (lower.includes('commercial')) return 'accent';
+  if (lower.includes('informational')) return 'info';
+  if (lower.includes('transactional')) return 'success';
+  return 'default';
+}
+
 export default function PositionAnalysisPage() {
-  const tabs = ['Landscape', 'Overview', 'Rankings Distribution', 'Tags', 'Pages', 'Cannibalization', 'Competitors Discovery', 'Devices & Locations', 'Featured Snippets'];
+  const tabs = ['Landscape', 'Overview', 'K/D Distribution', 'Clusters', 'Pages', 'Cannibalization', 'Competitors Discovery', 'Devices & Locations', 'Featured Snippets'];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -34,7 +42,7 @@ export default function PositionAnalysisPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 99, padding: '5px 14px 5px 10px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
-            cognitute.org
+            OWIS · Singapore
             <button style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1, padding: 0 }}>×</button>
           </div>
         </div>
@@ -52,14 +60,14 @@ export default function PositionAnalysisPage() {
           </MetricCard>
         </div>
 
-        {/* Rankings Distribution */}
+        {/* K/D Distribution */}
         <Card>
-          <CardHeader title="Rankings Distribution" />
+          <CardHeader title="Keyword Difficulty Distribution" />
           <div style={{ padding: 20 }}>
             {/* Color bar */}
             <div style={{ display: 'flex', height: 10, borderRadius: 99, overflow: 'hidden', marginBottom: 16 }}>
               {rankingsDistribution.map((r, i) => (
-                <div key={i} style={{ flex: r.count, background: r.color }} />
+                <div key={i} style={{ flex: r.count || 1, background: r.color }} />
               ))}
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -77,7 +85,7 @@ export default function PositionAnalysisPage() {
         <Card>
           <CardHeader
             title="Tracked Keywords"
-            subtitle="1,053 keywords tracked for India · Google"
+            subtitle={`${totalKeywordCount.toLocaleString()} keywords tracked for Singapore · Google`}
             action={
               <div style={{ display: 'flex', gap: 8 }}>
                 <button style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '5px 12px', cursor: 'pointer', fontFamily: 'var(--font-body)' }}>
@@ -90,19 +98,17 @@ export default function PositionAnalysisPage() {
             }
           />
           <Table
-            headers={['Keyword', 'Current Position', 'Change', 'Search Volume', 'Trend']}
-            rows={topKeywords.map(k => [
+            headers={['Keyword', 'Intent', 'Search Volume', 'K/D', 'Cluster']}
+            rows={topKeywords.slice(0, 30).map(k => [
               <div key="kw">
                 <div style={{ fontWeight: 500, fontSize: 13 }}>{k.keyword}</div>
               </div>,
-              <span key="pos" style={{ fontWeight: 700 }}>{k.position}</span>,
-              <span key="chg" style={{ color: k.change > 0 ? 'var(--green)' : 'var(--red)', fontWeight: 600, fontSize: 13 }}>
-                {k.change > 0 ? '▲' : '▼'} {Math.abs(k.change)}
+              <Badge key="intent" variant={getIntentVariant(k.intent)}>{k.intent || '—'}</Badge>,
+              <span key="vol" style={{ fontWeight: 700 }}>{k.volume.toLocaleString()}</span>,
+              <span key="kd" style={{ color: k.kd !== null ? (k.kd > 60 ? 'var(--red)' : k.kd > 30 ? 'var(--amber)' : 'var(--green)') : 'var(--text-muted)', fontWeight: 600, fontSize: 13 }}>
+                {k.kd !== null ? k.kd : 'n/a'}
               </span>,
-              k.volume.toLocaleString(),
-              <div key="trend" style={{ width: 80, display: 'inline-block' }}>
-                <SparkLine data={visibilityData.map(d => ({ ...d, value: d.value * (Math.random() * 0.5 + 0.75) }))} color={k.change > 0 ? 'var(--green)' : 'var(--red)'} height={30} />
-              </div>,
+              <span key="cluster" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{k.cluster || '—'}</span>,
             ])}
           />
         </Card>

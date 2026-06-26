@@ -8,14 +8,20 @@ import KeywordsPage from './components/pages/KeywordsPage';
 import TopPagesPage from './components/pages/TopPagesPage';
 import AIVisibilityPage from './components/pages/AIVisibilityPage';
 import ContentEnginePage from './components/pages/ContentEnginePage';
+import ProjectSetupPage from './components/pages/ProjectSetupPage';
 import PlaceholderPage from './components/pages/PlaceholderPage';
+import { totalKeywordCount } from './data/mockData';
 
 const PAGE_TITLES = {
   'home': { title: 'Home', subtitle: 'Your SEO workspace overview' },
-  'dashboard': { title: 'Dashboard', subtitle: 'cognitute.org · India · Google · Jun 15–22, 2026' },
-  'search-visibility': { title: 'Search Visibility', subtitle: 'Overview of your search performance' },
-  'search-visibility/position-analysis': { title: 'Position Tracking', subtitle: 'cognitute.org · India · Google · 1,053 keywords' },
-  'search-visibility/keywords': { title: 'Keywords', subtitle: '1,053 tracked keywords' },
+  'project-setup': { title: 'Project Setup', subtitle: 'Manage domains, pages, competitors and connectors' },
+  'project-setup/domain': { title: 'Project Setup · Domain', subtitle: 'Manage tracked domains' },
+  'project-setup/pages': { title: 'Project Setup · Pages', subtitle: 'Manage target and blog pages' },
+  'project-setup/competitors': { title: 'Project Setup · Competitors', subtitle: 'Track competitor domains' },
+  'project-setup/outreach': { title: 'Project Setup · Outreach', subtitle: 'Manage link outreach' },
+  'project-setup/connectors': { title: 'Project Setup · Connectors', subtitle: 'Connect data sources' },
+  'search-visibility/position-analysis': { title: 'Position Tracking', subtitle: `OWIS · Singapore · Google · ${totalKeywordCount.toLocaleString()} keywords` },
+  'search-visibility/keywords': { title: 'Keywords', subtitle: `${totalKeywordCount.toLocaleString()} tracked keywords` },
   'search-visibility/top-pages': { title: 'Top Pages', subtitle: 'Best performing pages by organic traffic' },
   'search-visibility/sales-pipeline': { title: 'Sales Pipeline', subtitle: 'Track keyword-to-conversion funnel' },
   'search-visibility/link-outreach': { title: 'Link Outreach', subtitle: 'Manage backlink acquisition campaigns' },
@@ -54,6 +60,7 @@ function renderPage(path, onNavigate) {
   switch (path) {
     case 'home': return <HomePage onNavigate={onNavigate} />;
     case 'dashboard': return <DashboardPage />;
+    case 'project-setup': return <ProjectSetupPage />;
     case 'search-visibility/position-analysis': return <PositionAnalysisPage />;
     case 'search-visibility/keywords': return <KeywordsPage />;
     case 'search-visibility/top-pages': return <TopPagesPage />;

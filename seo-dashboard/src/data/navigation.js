@@ -13,6 +13,12 @@ export const NAV_STRUCTURE = [
     path: 'dashboard',
   },
   {
+    id: 'project-setup',
+    label: 'Project Setup',
+    icon: 'FolderOpen',
+    path: 'project-setup',
+  },
+  {
     id: 'search-visibility',
     label: 'Search Visibility',
     icon: 'Search',

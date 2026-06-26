@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Home, LayoutDashboard, Search, Sparkles, FileText, ChevronDown, ChevronRight, Settings, HelpCircle, Bell } from 'lucide-react';
+import { Home, LayoutDashboard, Search, Sparkles, FileText, FolderOpen, ChevronDown, ChevronRight, Settings, HelpCircle, Bell } from 'lucide-react';
 import { NAV_STRUCTURE } from '../../data/navigation';
 
-const ICONS = { Home, LayoutDashboard, Search, Sparkles, FileText };
+const ICONS = { Home, LayoutDashboard, Search, Sparkles, FileText, FolderOpen };
 
 const MODULE_COLORS = {
   'search-visibility': { dot: '#e74c6f', bg: '#fdeef2' },
