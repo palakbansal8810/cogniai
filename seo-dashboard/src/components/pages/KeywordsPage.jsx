@@ -107,7 +107,7 @@ export default function KeywordsPage() {
               )}
             </div>,
             <span key="cluster" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{k.cluster || '—'}</span>,
-            <Badge key="target" variant={k.target === 'Landing Page' ? 'accent' : k.target === 'Blogs' || k.target === 'Blog' ? 'info' : 'default'}>{k.target || '—'}</Badge>,
+            <Badge key="target" variant={k.target === 'Landing Page' ? 'accent' : k.target === 'Topical Blog' ? 'info' : 'default'}>{k.target || '—'}</Badge>,
           ])}
         />
       </Card>

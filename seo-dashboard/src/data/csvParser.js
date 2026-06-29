@@ -38,7 +38,7 @@ export function parseKwDump(text) {
       kd: v[3] === 'n/a' || !v[3] ? null : parseInt(v[3]),
       category: (v[4] || '').trim(),
       cluster: (v[5] || '').trim(),
-      target: (v[6] || '').trim(),
+      target: ((t) => t === 'Blog' || t === 'Blogs' ? 'Topical Blog' : t)((v[6] || '').trim()),
       geo: (v[7] || '').trim(),
       topic: (v[8] || '').trim(),
     };

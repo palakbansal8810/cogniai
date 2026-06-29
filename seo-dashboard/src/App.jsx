@@ -9,6 +9,7 @@ import TopPagesPage from './components/pages/TopPagesPage';
 import AIVisibilityPage from './components/pages/AIVisibilityPage';
 import ContentEnginePage from './components/pages/ContentEnginePage';
 import ProjectSetupPage from './components/pages/ProjectSetupPage';
+import CompetitorsPage from './components/pages/CompetitorsPage';
 import PlaceholderPage from './components/pages/PlaceholderPage';
 import { totalKeywordCount } from './data/mockData';
 
@@ -64,6 +65,7 @@ function renderPage(path, onNavigate) {
     case 'search-visibility/position-analysis': return <PositionAnalysisPage />;
     case 'search-visibility/keywords': return <KeywordsPage />;
     case 'search-visibility/top-pages': return <TopPagesPage />;
+    case 'search-visibility/competitors': return <CompetitorsPage />;
     case 'ai-visibility':
     case 'ai-visibility/overview':
     case 'ai-visibility/brand-performance':

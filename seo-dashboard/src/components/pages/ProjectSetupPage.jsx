@@ -539,7 +539,7 @@ function AddCompetitorsModal({ open, onClose }) {
 // ─── Table rows data ─────────────────────────────────────────────────────────
 
 const targetPageCount = derivedPages.filter(p => p.targetCategory === 'Landing Page').length;
-const blogPageCount = derivedPages.filter(p => p.targetCategory === 'Blogs' || p.targetCategory === 'Blog').length;
+const blogPageCount = derivedPages.filter(p => p.targetCategory === 'Topical Blog').length;
 
 const INITIAL_PROJECTS = [
   { name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', locationIcon: 'desktop', traffic: '44.29%', trafficDir: null, da: null, keywords: projectSetupData.totalKeywords, keywordsDir: 'up', targetPages: targetPageCount, targetDir: 'up', blogPages: blogPageCount, updated: '20h ago' },
@@ -757,9 +757,130 @@ function PagesTab({ pages, onSelectProject }) {
     </div>
   );
 }
+function BulkEditModal({ open, onClose, count, onApply }) {
+  const [field, setField] = useState('');
+  const [value, setValue] = useState('');
+
+  const FIELDS = [
+    { value: 'cluster', label: 'Cluster', type: 'text' },
+    { value: 'category', label: 'Category', type: 'text' },
+    { value: 'targetCategory', label: 'Target Category', type: 'select', options: ['Landing Page', 'Topical Blog'] },
+    { value: 'targetType', label: 'Target Type', type: 'select', options: ['Commercial', 'Informational', 'Informational/Commercial', 'Transactional', 'Navigational'] },
+  ];
+
+  const selectedField = FIELDS.find(f => f.value === field);
+
+  const handleApply = () => {
+    if (!field || !value) return;
+    onApply(field, value);
+    setField('');
+    setValue('');
+    onClose();
+  };
+
+  return (
+    <Modal open={open} onClose={() => { onClose(); setField(''); setValue(''); }} title="Bulk Edit"
+      footer={<><Btn variant="primary" onClick={handleApply}>Apply to {count} page{count !== 1 ? 's' : ''}</Btn><Btn variant="outline" onClick={() => { onClose(); setField(''); setValue(''); }} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
+    >
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>
+        Editing <strong>{count}</strong> selected page{count !== 1 ? 's' : ''}
+      </div>
+
+      <Select
+        label="Field to edit"
+        placeholder="Choose a field"
+        value={field}
+        onChange={v => { setField(v); setValue(''); }}
+        options={FIELDS.map(f => ({ value: f.value, label: f.label }))}
+      />
+
+      {field && selectedField?.type === 'text' && (
+        <Input label="New value" placeholder={`Enter new ${selectedField.label.toLowerCase()}`} value={value} onChange={setValue} />
+      )}
+
+      {field && selectedField?.type === 'select' && (
+        <Select
+          label="New value"
+          placeholder={`Choose ${selectedField.label.toLowerCase()}`}
+          value={value}
+          onChange={setValue}
+          options={selectedField.options.map(o => ({ value: o, label: o }))}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function BulkDeleteModal({ open, onClose, count, onConfirm }) {
+  return (
+    <Modal open={open} onClose={onClose} title="Confirm Delete"
+      footer={<><Btn variant="primary" onClick={() => { onConfirm(); onClose(); }} style={{ background: 'var(--red)' }}>Delete {count} page{count !== 1 ? 's' : ''}</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
+    >
+      <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+        Are you sure you want to delete <strong>{count}</strong> selected page{count !== 1 ? 's' : ''}? This action cannot be undone.
+      </div>
+    </Modal>
+  );
+}
+
+function ActionsDropdown({ selectedCount, onBulkEdit, onBulkDelete }) {
+  const [open, setOpen] = useState(false);
+
+  if (selectedCount === 0) return null;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: '#0f1523', color: '#fff', border: 'none', borderRadius: 8,
+          padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          fontFamily: 'var(--font-body)', transition: 'opacity 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+      >
+        Actions ({selectedCount})
+        <ChevronDown size={13} />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 50,
+            background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: 160, overflow: 'hidden',
+          }}>
+            <button
+              onClick={() => { setOpen(false); onBulkEdit(); }}
+              style={{ width: '100%', padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text-primary)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <Edit2 size={14} color="var(--text-muted)" /> Bulk Edit
+            </button>
+            <div style={{ height: 1, background: 'var(--border)' }} />
+            <button
+              onClick={() => { setOpen(false); onBulkDelete(); }}
+              style={{ width: '100%', padding: '10px 16px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--red)', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, transition: 'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <Trash2 size={14} /> Bulk Delete
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PageDetailView({ project, onBack, onUpdatePages }) {
   const [rows, setRows] = useState(project.detailPages || []);
   const [selectedRows, setSelectedRows] = useState(new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
 
   const allSelected = rows.length > 0 && selectedRows.size === rows.length;
   const someSelected = selectedRows.size > 0 && selectedRows.size < rows.length;
@@ -805,6 +926,24 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
     });
   };
 
+  const handleBulkEditApply = (field, value) => {
+    setRows(prev => {
+      const updated = prev.map((r, i) => selectedRows.has(i) ? { ...r, [field]: value } : r);
+      onUpdatePages(updated);
+      return updated;
+    });
+    setSelectedRows(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    setRows(prev => {
+      const updated = prev.filter((_, i) => !selectedRows.has(i));
+      onUpdatePages(updated);
+      return updated;
+    });
+    setSelectedRows(new Set());
+  };
+
   return (
     <div>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -819,8 +958,16 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
           <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{project.domain}</span>
         </div>
         <div style={{ flex: 1 }} />
+        <ActionsDropdown
+          selectedCount={selectedRows.size}
+          onBulkEdit={() => setShowBulkEdit(true)}
+          onBulkDelete={() => setShowBulkDelete(true)}
+        />
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length} page{rows.length !== 1 ? 's' : ''}</span>
       </div>
+
+      <BulkEditModal open={showBulkEdit} onClose={() => setShowBulkEdit(false)} count={selectedRows.size} onApply={handleBulkEditApply} />
+      <BulkDeleteModal open={showBulkDelete} onClose={() => setShowBulkDelete(false)} count={selectedRows.size} onConfirm={handleBulkDelete} />
 
       <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
@@ -849,8 +996,7 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
                 style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 28px 5px 10px', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', color: 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center`, cursor: 'pointer', outline: 'none', minWidth: 130, letterSpacing: '0.3px' }}>
                 <option value="">Target Category</option>
                 <option value="Landing Page">Landing Page</option>
-                <option value="Blogs">Blogs</option>
-                <option value="Blog">Blog</option>
+                <option value="Topical Blog">Topical Blog</option>
               </select>
             </th>
             <th style={{ padding: '6px 16px', textAlign: 'left' }}>
@@ -892,32 +1038,8 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--accent)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.url}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.cluster}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.category}</td>
-              <td style={{ padding: '6px 16px' }}>
-                <select
-                  value={r.targetCategory || ''}
-                  onChange={e => updateRow(i, 'targetCategory', e.target.value)}
-                  style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 26px 5px 8px', fontSize: 12.5, fontFamily: 'var(--font-body)', color: r.targetCategory ? 'var(--text-primary)' : 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center`, cursor: 'pointer', outline: 'none', width: '100%' }}
-                >
-                  <option value="">—</option>
-                  <option value="Landing Page">Landing Page</option>
-                  <option value="Blogs">Blogs</option>
-                  <option value="Blog">Blog</option>
-                </select>
-              </td>
-              <td style={{ padding: '6px 16px' }}>
-                <select
-                  value={r.targetType || ''}
-                  onChange={e => updateRow(i, 'targetType', e.target.value)}
-                  style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 26px 5px 8px', fontSize: 12.5, fontFamily: 'var(--font-body)', color: r.targetType ? 'var(--text-primary)' : 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center`, cursor: 'pointer', outline: 'none', width: '100%' }}
-                >
-                  <option value="">—</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Informational">Informational</option>
-                  <option value="Informational/Commercial">Info/Commercial</option>
-                  <option value="Transactional">Transactional</option>
-                  <option value="Navigational">Navigational</option>
-                </select>
-              </td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.targetCategory ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.targetCategory || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.targetType ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.targetType || '—'}</td>
               <td style={{ padding: '10px 16px' }}>
                 <button onClick={() => deleteRow(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
                   onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = 'var(--red)'; }}
@@ -934,55 +1056,232 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
   );
 }
 
-function CompetitorsTab() {
-  const compLevel = (mentions) => {
-    if (mentions >= 6) return { label: 'High', color: 'var(--red)', bg: '#fef2f2' };
-    if (mentions >= 3) return { label: 'Medium', color: 'var(--amber)', bg: 'var(--amber-bg)' };
-    return { label: 'Low', color: 'var(--green)', bg: 'var(--green-bg)' };
-  };
+const COMPETITOR_ROWS = [
+  {
+    name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', da: null, commonKw: 44.29, commonKwChange: -0.47, totalKw: 139, totalKwChange: 139, aiCompLevel: 137, aiCompChange: -137, serpCompLevel: 757, dated: '20h ago',
+    details: [
+      { domain: 'owis.org', name: 'OWIS Main Site', regions: ['Singapore', 'India'], da: 42, rankingKeywords: 139, device: 'desktop', location: 'Singapore', commonKw: 38.12, totalKw: 139, aiCompLevel: 95, serpCompLevel: 520, dated: '20h ago' },
+      { domain: 'owis.org/admissions', name: 'OWIS Admissions', regions: ['Singapore'], da: 42, rankingKeywords: 47, device: 'desktop', location: 'Singapore', commonKw: 4.80, totalKw: 47, aiCompLevel: 28, serpCompLevel: 152, dated: '20h ago' },
+      { domain: 'owis.org/blog', name: 'OWIS Blog', regions: ['Singapore', 'Malaysia'], da: 42, rankingKeywords: 68, device: 'web', location: 'Singapore', commonKw: 1.37, totalKw: 68, aiCompLevel: 14, serpCompLevel: 85, dated: '20h ago' },
+    ],
+  },
+  {
+    name: 'owis.org', domain: 'owis.org', device: 'web', location: 'Singapore', da: null, commonKw: 2.40, commonKwChange: 2.40, totalKw: 1, totalKwChange: 1, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 4, dated: '19h ago',
+    details: [
+      { domain: 'owis.org', name: 'OWIS AI Presence', regions: ['Singapore'], da: 42, rankingKeywords: 1, device: 'web', location: 'Singapore', commonKw: 2.40, totalKw: 1, aiCompLevel: 0, serpCompLevel: 4, dated: '19h ago' },
+    ],
+  },
+  {
+    name: null, domain: null, device: 'google', location: 'Singapore', da: null, commonKw: 10.44, commonKwChange: 10.44, totalKw: 3, totalKwChange: 3, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 3, dated: '18h ago',
+    details: [
+      { domain: 'google.com', name: 'Google Search', regions: ['Singapore'], da: 98, rankingKeywords: 3, device: 'google', location: 'Singapore', commonKw: 10.44, totalKw: 3, aiCompLevel: 0, serpCompLevel: 3, dated: '18h ago' },
+    ],
+  },
+];
+
+const GoogleIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+  </svg>
+);
+
+const CompDeviceIcon = ({ type }) => {
+  if (type === 'desktop') return <Monitor size={14} color="#5a6478" />;
+  if (type === 'web') return <Globe size={14} color="#5a6478" />;
+  if (type === 'google') return <GoogleIcon />;
+  return <Globe size={14} color="#5a6478" />;
+};
+
+function RegionTags({ regions }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!regions || regions.length === 0) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>;
+
+  const first = regions[0];
+  const rest = regions.length - 1;
 
   return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+      <span style={{ fontSize: 11, fontWeight: 500, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px' }}>{first}</span>
+      {rest > 0 && !expanded && (
+        <span
+          onClick={e => { e.stopPropagation(); setExpanded(true); }}
+          style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', borderRadius: 99, padding: '2px 8px', cursor: 'pointer' }}
+        >
+          +{rest}
+        </span>
+      )}
+      {expanded && regions.slice(1).map(r => (
+        <span key={r} style={{ fontSize: 11, fontWeight: 500, background: 'var(--accent-light)', color: 'var(--accent)', borderRadius: 99, padding: '2px 10px' }}>{r}</span>
+      ))}
+      {expanded && (
+        <span
+          onClick={e => { e.stopPropagation(); setExpanded(false); }}
+          style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 4px' }}
+        >
+          ×
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CompetitorDetailView({ competitor, onBack }) {
+  const details = competitor.details || [];
+  const title = competitor.name || competitor.domain || 'Competitor';
+
+  return (
+    <div>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px 0', fontFamily: 'var(--font-body)', fontSize: 13 }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+          <ArrowLeft size={16} /> Back
+        </button>
+        <div style={{ height: 20, width: 1, background: 'var(--border)' }} />
+        <div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</span>
+          {competitor.domain && competitor.name && <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{competitor.domain}</span>}
+        </div>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{details.length} entr{details.length !== 1 ? 'ies' : 'y'}</span>
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
+          <thead>
+            <tr style={{ background: '#f8f9fb', borderBottom: '1px solid var(--border)' }}>
+              {[
+                { label: 'Domain', align: 'left' },
+                { label: 'Name', align: 'left' },
+                { label: 'Regions To Track', align: 'left' },
+                { label: 'DA', align: 'right' },
+                { label: 'Ranking Keywords', align: 'right' },
+                { label: 'Location', align: 'left' },
+                { label: "Common KW's", align: 'right' },
+                { label: "Tot. KW's", align: 'right' },
+                { label: 'AI Comp. Level', align: 'right' },
+                { label: 'SERP Comp Level', align: 'right' },
+                { label: 'dated', align: 'right' },
+              ].map((h, i) => (
+                <th key={i} style={{ padding: '10px 16px', textAlign: h.align, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {details.length === 0 ? (
+              <tr><td colSpan={11} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No detail entries yet.</td></tr>
+            ) : details.map((d, i) => (
+              <tr key={i} style={{ borderBottom: i < details.length - 1 ? '1px solid var(--border)' : 'none' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 500, color: 'var(--accent)' }}>{d.domain}</td>
+                <td style={{ padding: '12px 16px', fontSize: 13, color: 'var(--text-primary)' }}>{d.name}</td>
+                <td style={{ padding: '12px 16px' }}>
+                  <RegionTags regions={d.regions} />
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{d.da ?? '—'}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{d.rankingKeywords}</td>
+                <td style={{ padding: '12px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+                    <CompDeviceIcon type={d.device} />
+                    {d.location}
+                  </div>
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>{d.commonKw?.toFixed(2)}%</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: d.totalKw > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
+                  {d.totalKw > 0 ? '↑' : ''}{d.totalKw}
+                </td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: d.aiCompLevel > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{d.aiCompLevel}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{d.serpCompLevel}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{d.dated}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CompetitorsTab({ onSelectCompetitor }) {
+  return (
     <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
       <thead>
-        <tr style={{ background: '#f8f9fb', borderBottom: '1px solid var(--border)' }}>
-          {['Competitor', 'Location', 'Total Mentions', 'Comp. Level', 'SERP Mentions', 'AI Mentions', 'AI Share', ''].map((h, i) => (
-            <th key={i} style={{ padding: '10px 16px', textAlign: i <= 1 ? 'left' : 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h}</th>
-          ))}
+        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+          <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Competitors</th>
+          <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Location</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>DA</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Common KW's</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Tot. KW's</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>AI Comp. Level</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>SERP Comp Level</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>dated</th>
+          <th style={{ padding: '10px 16px' }}></th>
         </tr>
       </thead>
       <tbody>
-        {competitorData.map((c, i) => {
-          const level = compLevel(c.mentions);
-          return (
-            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <td style={{ padding: '14px 16px' }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>{c.name}</div>
-              </td>
-              <td style={{ padding: '14px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 13, fontWeight: 500 }}>
-                  <Globe size={14} color="#5a6478" /> Singapore
+        {COMPETITOR_ROWS.map((c, i) => (
+          <tr key={i} style={{ borderBottom: i < COMPETITOR_ROWS.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            onClick={() => onSelectCompetitor(i)}>
+            {/* Competitor name & domain */}
+            <td style={{ padding: '14px 16px' }}>
+              {c.name && (
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}
+                  onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                  onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>
+                  {c.name}
                 </div>
-              </td>
-              <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>{c.mentions}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                <span style={{ fontSize: 12, color: level.color, background: level.bg, borderRadius: 99, padding: '2px 8px', fontWeight: 600 }}>{level.label}</span>
-              </td>
-              <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--blue)' }}>{c.serpMentions}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--green)' }}>{c.aiMentions}</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{c.aiVisibility}%</td>
-              <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  <Edit2 size={14} />
-                </button>
-              </td>
-            </tr>
-          );
-        })}
+              )}
+              {c.domain && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{c.domain}</div>}
+              {c.name && <div style={{ marginTop: 4, fontSize: 16, color: 'var(--border)' }}></div>}
+            </td>
+            {/* Location */}
+            <td style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+                <CompDeviceIcon type={c.device} />
+                {c.location}
+              </div>
+            </td>
+            {/* DA */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {c.da ?? ''}
+            </td>
+            {/* Common KW's % */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {c.commonKw.toFixed(2)}%
+            </td>
+            {/* Tot. KW's */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: c.totalKwChange > 0 ? 'var(--green)' : c.totalKwChange < 0 ? 'var(--red)' : 'var(--text-muted)' }}>
+              {c.totalKwChange > 0 ? '↑' : c.totalKwChange < 0 ? '↓' : ''}{Math.abs(c.totalKwChange)}
+            </td>
+            {/* AI Comp. Level */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: c.aiCompChange > 0 ? 'var(--green)' : c.aiCompChange < 0 ? 'var(--red)' : 'var(--text-muted)' }}>
+              {c.aiCompChange > 0 ? '↑' : c.aiCompChange < 0 ? '↓' : ''}{Math.abs(c.aiCompChange)}
+            </td>
+            {/* SERP Comp Level */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {c.serpCompLevel}
+            </td>
+            {/* Dated */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+              {c.dated}
+            </td>
+            {/* Edit */}
+            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+              <button onClick={e => e.stopPropagation()} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-hover)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                <Edit2 size={13} color="var(--text-muted)" />
+              </button>
+            </td>
+          </tr>
+        ))}
       </tbody>
     </table>
     </div>
@@ -993,12 +1292,13 @@ function CompetitorsTab() {
 
 export default function ProjectSetupPage({ tab }) {
   const [activeTab, setActiveTab] = useState(tab || 'Domain');
-  useEffect(() => { if (tab) { setActiveTab(tab); setSelectedPageProject(null); } }, [tab]);
+  useEffect(() => { if (tab) { setActiveTab(tab); setSelectedPageProject(null); setSelectedCompetitor(null); } }, [tab]);
   const [filter, setFilter] = useState('All targets');
   const [search, setSearch] = useState('');
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
   const [pages, setPages] = useState(INITIAL_PAGES);
   const [selectedPageProject, setSelectedPageProject] = useState(null);
+  const [selectedCompetitor, setSelectedCompetitor] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showAddPages, setShowAddPages] = useState(false);
   const [showAddCompetitors, setShowAddCompetitors] = useState(false);
@@ -1091,7 +1391,7 @@ export default function ProjectSetupPage({ tab }) {
         {TABS.map(t => (
           <button
             key={t}
-            onClick={() => { setActiveTab(t); setSelectedPageProject(null); }}
+            onClick={() => { setActiveTab(t); setSelectedPageProject(null); setSelectedCompetitor(null); }}
             style={{
               padding: '10px 20px',
               fontSize: 14,
@@ -1171,7 +1471,12 @@ export default function ProjectSetupPage({ tab }) {
               onUpdatePages={(updated) => setPages(prev => prev.map((p, i) => i === selectedPageProject ? { ...p, detailPages: updated } : p))}
             />
           ) : activeTab === 'Pages' && <PagesTab pages={pages} onSelectProject={setSelectedPageProject} />}
-          {activeTab === 'Competitors' && <CompetitorsTab />}
+          {activeTab === 'Competitors' && selectedCompetitor !== null ? (
+            <CompetitorDetailView
+              competitor={COMPETITOR_ROWS[selectedCompetitor]}
+              onBack={() => setSelectedCompetitor(null)}
+            />
+          ) : activeTab === 'Competitors' && <CompetitorsTab onSelectCompetitor={setSelectedCompetitor} />}
           {(activeTab === 'Outreach' || activeTab === 'Connectors') && (
             <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
               No {activeTab.toLowerCase()} configured yet. Click <strong>+ {cta.label}</strong> to get started.

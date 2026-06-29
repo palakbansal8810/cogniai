@@ -174,7 +174,7 @@ export const topPages = [
 
 // ── Project Setup derived data ───────────────────────────────────────
 const landingKws = allKeywords.filter(k => k.target === 'Landing Page');
-const blogKws = allKeywords.filter(k => k.target === 'Blogs' || k.target === 'Blog');
+const blogKws = allKeywords.filter(k => k.target === 'Topical Blog');
 
 // Join Brand Mention (Site Name, Page URL) with KW Dump (Cluster, Intent, Target)
 // Shows ALL entries from Brand Mention CSV — each keyword × source combination
