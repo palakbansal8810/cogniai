@@ -17,7 +17,9 @@ const COMPETITORS = [
     aiCompLevel: 137,
     aiCompLevelChange: -137,
     serpCompLevel: 757,
+    compLevel: 82,
     dated: '20h ago',
+    targetPlatforms: ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'],
   },
   {
     id: 2,
@@ -26,14 +28,16 @@ const COMPETITORS = [
     device: 'Web',
     location: 'Singapore',
     da: 44,
-    commonKw: 2.40,
+    commonKw: 24.44,
     commonKwChange: 2.40,
-    totalKw: 1,
+    totalKw: 90,
     totalKwChange: 1,
     aiCompLevel: 0,
     aiCompLevelChange: 0,
     serpCompLevel: 4,
+    compLevel: 12,
     dated: '19h ago',
+    targetPlatforms: ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'],
   },
   {
     id: 3,
@@ -42,14 +46,16 @@ const COMPETITORS = [
     device: 'Search',
     location: 'Singapore',
     da: 98,
-    commonKw: 10.44,
+    commonKw: 5.56,
     commonKwChange: 10.44,
-    totalKw: 3,
+    totalKw: 190,
     totalKwChange: 3,
     aiCompLevel: 0,
     aiCompLevelChange: 0,
     serpCompLevel: 3,
+    compLevel: 95,
     dated: '18h ago',
+    targetPlatforms: ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'],
   },
   {
     id: 4,
@@ -65,7 +71,9 @@ const COMPETITORS = [
     aiCompLevel: 42,
     aiCompLevelChange: -12,
     serpCompLevel: 412,
+    compLevel: 67,
     dated: '16h ago',
+    targetPlatforms: ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'],
   },
   {
     id: 5,
@@ -81,11 +89,39 @@ const COMPETITORS = [
     aiCompLevel: 28,
     aiCompLevelChange: 5,
     serpCompLevel: 289,
+    compLevel: 54,
     dated: '14h ago',
+    targetPlatforms: ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'],
   },
 ];
 
-const TABS = ['All targets', 'AI Search', 'SEO'];
+const TABS = ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'];
+
+const PLATFORM_STYLES = {
+  'AI Mode':     { bg: '#ede9fe', color: '#7c3aed' },
+  'AI Overview': { bg: '#dbeafe', color: '#1d4ed8' },
+  'Google':      { bg: '#fef9c3', color: '#854d0e' },
+  'ChatGPT':     { bg: '#dcfce7', color: '#166534' },
+  'Gemini':      { bg: '#fce7f3', color: '#9d174d' },
+};
+
+const PlatformBadge = ({ platform }) => {
+  const style = PLATFORM_STYLES[platform] || { bg: '#f3f4f6', color: '#374151' };
+  return (
+    <span style={{
+      display: 'inline-block',
+      padding: '2px 8px',
+      borderRadius: 12,
+      fontSize: 11,
+      fontWeight: 600,
+      background: style.bg,
+      color: style.color,
+      whiteSpace: 'nowrap',
+    }}>
+      {platform}
+    </span>
+  );
+};
 
 const DeviceIcon = ({ device }) => {
   if (device === 'Desktop') return <Monitor size={14} color="var(--text-muted)" />;
@@ -115,7 +151,7 @@ const ChangeIndicator = ({ value, showSign = true }) => {
 
 export default function CompetitorsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('All targets');
+  const [activeTab, setActiveTab] = useState('AI Mode');
 
   const filtered = COMPETITORS.filter(c => {
     const matchSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,39 +200,6 @@ export default function CompetitorsPage() {
               />
             </div>
 
-            {/* Tabs */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-sm)',
-              overflow: 'hidden',
-            }}>
-              {TABS.map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  style={{
-                    padding: '7px 14px',
-                    fontSize: 12.5,
-                    fontWeight: activeTab === tab ? 600 : 500,
-                    fontFamily: 'var(--font-body)',
-                    color: activeTab === tab ? 'var(--accent)' : 'var(--text-secondary)',
-                    background: activeTab === tab ? 'var(--surface)' : 'transparent',
-                    border: 'none',
-                    borderRight: '1px solid var(--border)',
-                    cursor: 'pointer',
-                    transition: 'background 0.15s, color 0.15s',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={e => { if (activeTab !== tab) e.currentTarget.style.background = '#f0f2f7'; }}
-                  onMouseLeave={e => { if (activeTab !== tab) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Add button */}
@@ -229,10 +232,10 @@ export default function CompetitorsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Competitors', 'Device & Location', 'DA', "Common KW's", '', "Tot. KW's", 'AI Comp. Level', 'SERP Comp Level', 'dated', ''].map((h, i) => (
+                {['Competitors', 'Device & Location', 'Target Platforms', 'PA', "Common KW's", '', "Tot. KW's", 'AI Comp. Level', 'SERP Comp Level', 'Comp Level', 'dated', ''].map((h, i) => (
                   <th key={i} style={{
                     padding: '10px 16px',
-                    textAlign: i === 0 || i === 1 ? 'left' : 'right',
+                    textAlign: i === 0 || i === 1 || i === 2 ? 'left' : 'right',
                     fontSize: 11.5,
                     fontWeight: 600,
                     color: 'var(--text-muted)',
@@ -269,16 +272,22 @@ export default function CompetitorsPage() {
                     </div>
                   </td>
 
-                  {/* DA */}
+                  {/* Target Platforms */}
+                  <td style={{ padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {comp.targetPlatforms.map(p => <PlatformBadge key={p} platform={p} />)}
+                    </div>
+                  </td>
+
+                  {/* PA */}
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <span style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700 }}>{comp.da || ''}</span>
                   </td>
 
                   {/* Common KW's % */}
-                  <td style={{ padding: '14px 8px', textAlign: 'right' }}>
-                    <span style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600 }}>
-                      {comp.commonKw.toFixed(2)}%
-                    </span>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color:'var(--text-primary)' }}>
+                      {Math.round((comp.commonKw / 100) * comp.totalKw)}<span style={{ fontSize: 18, fontWeight: 300, margin: '0 1px' }}>/</span>{comp.totalKw}
+                  
                   </td>
 
                   {/* Common KW's change */}
@@ -299,13 +308,22 @@ export default function CompetitorsPage() {
 
                   {/* AI Comp Level */}
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                    <ChangeIndicator value={comp.aiCompLevelChange} />
+                    <span style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                      {Math.min(comp.aiCompLevel, 100)}%
+                    </span>
                   </td>
 
                   {/* SERP Comp Level */}
                   <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                     <span style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                      {comp.serpCompLevel}
+                      {Math.min(comp.serpCompLevel, 100)}%
+                    </span>
+                  </td>
+
+                  {/* Comp Level */}
+                  <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                    <span style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                      {Math.min(comp.compLevel, 100)}%
                     </span>
                   </td>
 

@@ -513,8 +513,8 @@ function AddPagesModal({ open, onClose, projects, onImportPages }) {
 function AddCompetitorsModal({ open, onClose }) {
   const [domain, setDomain] = useState('');
   const [name, setName] = useState('');
+  const [da, setDa] = useState('');
   const [regions, setRegions] = useState([]);
-  const [share, setShare] = useState(false);
 
   return (
     <Modal open={open} onClose={onClose} title="Add Competitors"
@@ -522,6 +522,7 @@ function AddCompetitorsModal({ open, onClose }) {
     >
       <Input label="Domain" hint="domain" placeholder="domain.com" value={domain} onChange={setDomain} />
       <Input label="Name" placeholder="Auto-generated if left blank" value={name} onChange={setName} />
+      <Input label="DA" placeholder="e.g. 45" value={da} onChange={setDa} />
 
       <div style={{ height: 1, background: 'var(--border)' }} />
 
@@ -541,10 +542,20 @@ function AddCompetitorsModal({ open, onClose }) {
 const targetPageCount = derivedPages.filter(p => p.targetCategory === 'Landing Page').length;
 const blogPageCount = derivedPages.filter(p => p.targetCategory === 'Topical Blog').length;
 
+const ALL_PLATFORMS = ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'];
+
+const PLATFORM_BADGE_STYLES = {
+  'AI Mode':     { bg: '#ede9fe', color: '#7c3aed' },
+  'AI Overview': { bg: '#dbeafe', color: '#1d4ed8' },
+  'Google':      { bg: '#fef9c3', color: '#854d0e' },
+  'ChatGPT':     { bg: '#dcfce7', color: '#166534' },
+  'Gemini':      { bg: '#fce7f3', color: '#9d174d' },
+};
+
 const INITIAL_PROJECTS = [
-  { name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', locationIcon: 'desktop', traffic: '44.29%', trafficDir: null, da: null, keywords: projectSetupData.totalKeywords, keywordsDir: 'up', targetPages: targetPageCount, targetDir: 'up', blogPages: blogPageCount, updated: '20h ago' },
-  { name: 'owis.org', domain: 'owis.org', device: 'ai', location: 'Singapore', locationIcon: 'ai', traffic: '2.40%', trafficDir: 'up', da: null, keywords: brandMentionKeywords.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: projectSetupData.aiMentionCount, updated: '19h ago' },
-  { name: 'Cogni', domain: 'cogni.org', device: 'google', location: 'Singapore', locationIcon: 'google', traffic: '10.44%', trafficDir: 'up', da: null, keywords: competitorData.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: 3, updated: '18h ago' },
+  { name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', locationIcon: 'desktop', traffic: '44.29%', trafficDir: null, da: null, keywords: projectSetupData.totalKeywords, keywordsDir: 'up', targetPages: targetPageCount, targetDir: 'up', blogPages: blogPageCount, updated: '20h ago', targetPlatforms: ['Google', 'AI Mode'] },
+  { name: 'owis.org', domain: 'owis.org', device: 'ai', location: 'Singapore', locationIcon: 'ai', traffic: '2.40%', trafficDir: 'up', da: null, keywords: brandMentionKeywords.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: projectSetupData.aiMentionCount, updated: '19h ago', targetPlatforms: ['AI Overview', 'ChatGPT'] },
+  { name: 'Cogni', domain: 'cogni.org', device: 'google', location: 'Singapore', locationIcon: 'google', traffic: '10.44%', trafficDir: 'up', da: null, keywords: competitorData.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: 3, updated: '18h ago', targetPlatforms: ['Google'] },
 ];
 
 const DeviceIcon = ({ type }) => {
@@ -558,14 +569,26 @@ const DeviceIcon = ({ type }) => {
 
 const TABS = ['Domain', 'Pages', 'Competitors', 'Outreach', 'Connectors'];
 
-function DomainTab({ projects }) {
+function DomainTab({ projects, filter }) {
+  const [expandedRows, setExpandedRows] = useState(new Set());
+
+  const toggleRow = (i) => setExpandedRows(prev => {
+    const next = new Set(prev);
+    next.has(i) ? next.delete(i) : next.add(i);
+    return next;
+  });
+
+  const visibleProjects = filter
+    ? projects.filter(p => (p.targetPlatforms || ALL_PLATFORMS).includes(filter))
+    : projects;
+
   return (
     <div style={{ overflowX: 'auto' }}>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
       <thead>
         <tr style={{ background: '#f8f9fb', borderBottom: '1px solid var(--border)' }}>
-          {['Project', 'Location', 'DA', 'Traffic', 'Keywords', 'Target Pages', 'Blog Pages', 'Updated', ''].map((h, i) => (
-            <th key={i} style={{ padding: '10px 16px', textAlign: i <= 1 ? 'left' : 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>
+          {['Project', 'Location', 'Target Platforms', 'DA', 'Traffic', 'Keywords', 'Target Pages', 'Blog Pages', 'Updated', ''].map((h, i) => (
+            <th key={i} style={{ padding: '10px 16px', textAlign: i <= 2 ? 'left' : 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>
               {h === 'Project' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Project <span style={{ fontSize: 10 }}>⇅</span></div>
               ) : h}
@@ -574,7 +597,7 @@ function DomainTab({ projects }) {
         </tr>
       </thead>
       <tbody>
-        {projects.map((p, i) => (
+        {visibleProjects.map((p, i) => (
           <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
             onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -587,6 +610,46 @@ function DomainTab({ projects }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 13, fontWeight: 500 }}>
                 <DeviceIcon type={p.locationIcon} />
                 {p.location}
+              </div>
+            </td>
+            <td style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                {(() => {
+                  const platforms = p.targetPlatforms || ALL_PLATFORMS;
+                  const isExpanded = expandedRows.has(i);
+                  const visible = isExpanded ? platforms : platforms.slice(0, 1);
+                  const hiddenCount = platforms.length - 1;
+                  return (
+                    <>
+                      {visible.map(platform => {
+                        const s = PLATFORM_BADGE_STYLES[platform] || { bg: '#f3f4f6', color: '#374151' };
+                        return (
+                          <span key={platform} style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>
+                            {platform}
+                          </span>
+                        );
+                      })}
+                      {hiddenCount > 0 && (
+                        <button
+                          onClick={() => toggleRow(i)}
+                          style={{
+                            fontSize: 11, fontWeight: 600,
+                            color: 'var(--text-muted)',
+                            background: '#f3f4f6',
+                            border: '1px solid var(--border)',
+                            borderRadius: 12,
+                            padding: '2px 8px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {isExpanded ? '×' : `+${hiddenCount}`}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </td>
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, color: 'var(--text-muted)' }}>—</td>
@@ -606,7 +669,9 @@ function DomainTab({ projects }) {
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>{p.blogPages}</td>
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{p.updated}</td>
             <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
+              <button
+                onClick={() => setEditingIdx(i)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>
                 <Edit2 size={14} />
@@ -668,95 +733,112 @@ const INITIAL_PAGES = [
 ];
 
 function PagesTab({ pages, onSelectProject }) {
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
-      <thead>
-        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-          {[
-            { label: 'Project', align: 'left' },
-            { label: 'Location', align: 'left' },
-            { label: 'Total  Pages', align: 'right' },
-            { label: 'Commercial vs Others', align: 'right' },
-            { label: 'Blog Pages', align: 'right' },
-            { label: 'Keywords', align: 'right' },
-            { label: 'Updated', align: 'right' },
-            { label: '', align: 'right' },
-          ].map((h, i) => (
-            <th key={i} style={{ padding: '10px 16px', textAlign: h.align, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>
-              {h.label === 'Project'
-                ? <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Project <span style={{ fontSize: 10 }}>⇅</span></div>
-                : h.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {pages.map((p, i) => (
-          <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-
-            <td style={{ padding: '14px 16px' }}>
-              {p.name && (
-                <div
-                  onClick={() => onSelectProject(i)}
-                  style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', marginBottom: 2, cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-                  onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
-                >{p.name}</div>
-              )}
-              {p.domain && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.domain}</div>}
-              {p.name && <div style={{ marginTop: 4, fontSize: 16, color: 'var(--border)' }}></div>}
-            </td>
-
-            <td style={{ padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 13, fontWeight: 500 }}>
-                <DeviceIcon type={p.locationIcon} />
-                {p.location}
-              </div>
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>
-              {p.totalPages ?? ''}
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>
-                {p.commercialPct}
-              </span>
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: p.blogDir === 'up' ? 'var(--green)' : 'var(--text-muted)' }}>
-                {p.blogDir === 'up' ? '↑' : ''}{p.blogPages}
-              </span>
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <span style={{ fontSize: 13.5, fontWeight: 600, color: p.keywordsDir === 'down' ? 'var(--red)' : 'var(--text-muted)' }}>
-                {p.keywordsDir === 'down' ? `↓${p.keywords}` : p.keywords}
-              </span>
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-              {p.updated}
-            </td>
-
-            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                <Edit2 size={14} />
-              </button>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-    </div>
+    <>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {[
+                { label: 'Project', align: 'left' },
+                { label: 'Location', align: 'left' },
+                { label: 'Total  Pages', align: 'right' },
+                { label: 'Commercial vs Others', align: 'right' },
+                { label: 'Blog Pages', align: 'right' },
+                { label: 'Keywords', align: 'right' },
+                { label: 'Updated', align: 'right' },
+                { label: '', align: 'right' },
+              ].map((h, i) => (
+                <th key={i} style={{ padding: '10px 16px', textAlign: h.align, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>
+                  {h.label === 'Project'
+                    ? <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>Project <span style={{ fontSize: 10 }}>⇅</span></div>
+                    : h.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {pages.map((p, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <td style={{ padding: '14px 16px' }}>
+                  {p.name && (
+                    <div onClick={() => onSelectProject(i)} style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', marginBottom: 2, cursor: 'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                      onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>{p.name}</div>
+                  )}
+                  {p.domain && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.domain}</div>}
+                  {p.name && <div style={{ marginTop: 4, fontSize: 16, color: 'var(--border)' }}></div>}
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 13, fontWeight: 500 }}>
+                    <DeviceIcon type={p.locationIcon} />
+                    {p.location}
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px', textAlign: 'right', color: 'var(--text-muted)', fontSize: 13 }}>{p.totalPages ?? ''}</td>
+                <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)' }}>{p.commercialPct}</span>
+                </td>
+                <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: p.blogDir === 'up' ? 'var(--green)' : 'var(--text-muted)' }}>
+                    {p.blogDir === 'up' ? '↑' : ''}{p.blogPages}
+                  </span>
+                </td>
+                <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: p.keywordsDir === 'down' ? 'var(--red)' : 'var(--text-muted)' }}>
+                    {p.keywordsDir === 'down' ? `↓${p.keywords}` : p.keywords}
+                  </span>
+                </td>
+                <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{p.updated}</td>
+                <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                    <Edit2 size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
+function EditPageModal({ open, onClose, page, onSave }) {
+  const [pageName, setPageName] = useState('');
+  const [regions, setRegions] = useState([]);
+  const [da, setDa] = useState('');
+
+  if (!open) return null;
+
+  const initRegions = page?.region ? [page.region] : [];
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Page"
+      footer={
+        <>
+          <Btn variant="primary" onClick={() => { onSave({ pageName: pageName || page?.pageName, regions, da: da !== '' ? Number(da) : null }); onClose(); }}>Save</Btn>
+          <Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn>
+        </>
+      }
+    >
+      <Input label="Page Name" placeholder="e.g. OWIS Admissions" value={pageName || page?.pageName || ''} onChange={setPageName} />
+      <CountryTagInput
+        label="Target Regions"
+        tags={regions.length > 0 ? regions : initRegions}
+        onAdd={r => setRegions(prev => [...(prev.length > 0 ? prev : initRegions), r])}
+        onRemove={r => setRegions(prev => (prev.length > 0 ? prev : initRegions).filter(x => x !== r))}
+        placeholder="e.g. India, Singapore, USA"
+      />
+      <Input label="DA" placeholder="e.g. 42" value={da !== '' ? da : (page?.da ?? '')} onChange={setDa} />
+    </Modal>
+  );
+}
+
 function BulkEditModal({ open, onClose, count, onApply }) {
   const [field, setField] = useState('');
   const [value, setValue] = useState('');
@@ -881,6 +963,7 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [editingPage, setEditingPage] = useState(null);
 
   const allSelected = rows.length > 0 && selectedRows.size === rows.length;
   const someSelected = selectedRows.size > 0 && selectedRows.size < rows.length;
@@ -1058,23 +1141,23 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
 
 const COMPETITOR_ROWS = [
   {
-    name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', da: null, commonKw: 44.29, commonKwChange: -0.47, totalKw: 139, totalKwChange: 139, aiCompLevel: 137, aiCompChange: -137, serpCompLevel: 757, dated: '20h ago',
+    name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', da: null, commonKw: 44.29, commonKwChange: -0.47, totalKw: 139, totalKwChange: 139, aiCompLevel: 137, aiCompChange: -137, serpCompLevel: 757, compLevel: 82, dated: '20h ago',
     details: [
-      { domain: 'owis.org', name: 'OWIS Main Site', regions: ['Singapore', 'India'], da: 42, rankingKeywords: 139, device: 'desktop', location: 'Singapore', commonKw: 38.12, totalKw: 139, aiCompLevel: 95, serpCompLevel: 520, dated: '20h ago' },
-      { domain: 'owis.org/admissions', name: 'OWIS Admissions', regions: ['Singapore'], da: 42, rankingKeywords: 47, device: 'desktop', location: 'Singapore', commonKw: 4.80, totalKw: 47, aiCompLevel: 28, serpCompLevel: 152, dated: '20h ago' },
-      { domain: 'owis.org/blog', name: 'OWIS Blog', regions: ['Singapore', 'Malaysia'], da: 42, rankingKeywords: 68, device: 'web', location: 'Singapore', commonKw: 1.37, totalKw: 68, aiCompLevel: 14, serpCompLevel: 85, dated: '20h ago' },
+      { domain: 'owis.org', name: 'OWIS Main Site', regions: ['Singapore', 'India'], da: 42, rankingKeywords: 139, device: 'desktop', location: 'Singapore', commonKw: 38.12, totalKw: 139, aiCompLevel: 95, serpCompLevel: 520, compLevel: 78, dated: '20h ago' },
+      { domain: 'owis.org/admissions', name: 'OWIS Admissions', regions: ['Singapore'], da: 42, rankingKeywords: 47, device: 'desktop', location: 'Singapore', commonKw: 4.80, totalKw: 47, aiCompLevel: 28, serpCompLevel: 152, compLevel: 45, dated: '20h ago' },
+      { domain: 'owis.org/blog', name: 'OWIS Blog', regions: ['Singapore', 'Malaysia'], da: 42, rankingKeywords: 68, device: 'web', location: 'Singapore', commonKw: 1.37, totalKw: 68, aiCompLevel: 14, serpCompLevel: 85, compLevel: 31, dated: '20h ago' },
     ],
   },
   {
-    name: 'owis.org', domain: 'owis.org', device: 'web', location: 'Singapore', da: null, commonKw: 2.40, commonKwChange: 2.40, totalKw: 1, totalKwChange: 1, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 4, dated: '19h ago',
+    name: 'owis.org', domain: 'owis.org', device: 'web', location: 'Singapore', da: null, commonKw: 24.44, commonKwChange: 2.40, totalKw: 90, totalKwChange: 1, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 4, compLevel: 12, dated: '19h ago',
     details: [
-      { domain: 'owis.org', name: 'OWIS AI Presence', regions: ['Singapore'], da: 42, rankingKeywords: 1, device: 'web', location: 'Singapore', commonKw: 2.40, totalKw: 1, aiCompLevel: 0, serpCompLevel: 4, dated: '19h ago' },
+      { domain: 'owis.org', name: 'OWIS AI Presence', regions: ['Singapore'], da: 42, rankingKeywords: 1, device: 'web', location: 'Singapore', commonKw: 24.44, totalKw: 90, aiCompLevel: 0, serpCompLevel: 4, compLevel: 12, dated: '19h ago' },
     ],
   },
   {
-    name: null, domain: null, device: 'google', location: 'Singapore', da: null, commonKw: 10.44, commonKwChange: 10.44, totalKw: 3, totalKwChange: 3, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 3, dated: '18h ago',
+    name: null, domain: null, device: 'google', location: 'Singapore', da: null, commonKw: 5.56, commonKwChange: 10.44, totalKw: 190, totalKwChange: 3, aiCompLevel: 0, aiCompChange: 0, serpCompLevel: 3, compLevel: 95, dated: '18h ago',
     details: [
-      { domain: 'google.com', name: 'Google Search', regions: ['Singapore'], da: 98, rankingKeywords: 3, device: 'google', location: 'Singapore', commonKw: 10.44, totalKw: 3, aiCompLevel: 0, serpCompLevel: 3, dated: '18h ago' },
+      { domain: 'google.com', name: 'Google Search', regions: ['Singapore'], da: 98, rankingKeywords: 3, device: 'google', location: 'Singapore', commonKw: 5.56, totalKw: 90, aiCompLevel: 0, serpCompLevel: 3, compLevel: 95, dated: '18h ago' },
     ],
   },
 ];
@@ -1157,13 +1240,14 @@ function CompetitorDetailView({ competitor, onBack }) {
                 { label: 'Domain', align: 'left' },
                 { label: 'Name', align: 'left' },
                 { label: 'Regions To Track', align: 'left' },
-                { label: 'DA', align: 'right' },
+                { label: 'PA', align: 'right' },
                 { label: 'Ranking Keywords', align: 'right' },
                 { label: 'Location', align: 'left' },
                 { label: "Common KW's", align: 'right' },
                 { label: "Tot. KW's", align: 'right' },
                 { label: 'AI Comp. Level', align: 'right' },
                 { label: 'SERP Comp Level', align: 'right' },
+                { label: 'Comp Level', align: 'right' },
                 { label: 'dated', align: 'right' },
               ].map((h, i) => (
                 <th key={i} style={{ padding: '10px 16px', textAlign: h.align, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h.label}</th>
@@ -1172,7 +1256,7 @@ function CompetitorDetailView({ competitor, onBack }) {
           </thead>
           <tbody>
             {details.length === 0 ? (
-              <tr><td colSpan={11} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No detail entries yet.</td></tr>
+              <tr><td colSpan={12} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No detail entries yet.</td></tr>
             ) : details.map((d, i) => (
               <tr key={i} style={{ borderBottom: i < details.length - 1 ? '1px solid var(--border)' : 'none' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
@@ -1190,12 +1274,13 @@ function CompetitorDetailView({ competitor, onBack }) {
                     {d.location}
                   </div>
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>{d.commonKw?.toFixed(2)}%</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>{Math.round(((d.commonKw ?? 0) / 100) * d.totalKw)}<span style={{ fontSize: 18, fontWeight: 300, margin: '0 1px' }}>/</span>{d.totalKw}</td>
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: d.totalKw > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
                   {d.totalKw > 0 ? '↑' : ''}{d.totalKw}
                 </td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: d.aiCompLevel > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>{d.aiCompLevel}</td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{d.serpCompLevel}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{Math.min(d.aiCompLevel, 100)}%</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{Math.min(d.serpCompLevel, 100)}%</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>{Math.min(d.compLevel, 100)}%</td>
                 <td style={{ padding: '12px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{d.dated}</td>
               </tr>
             ))}
@@ -1206,8 +1291,43 @@ function CompetitorDetailView({ competitor, onBack }) {
   );
 }
 
-function CompetitorsTab({ onSelectCompetitor }) {
+function EditCompetitorModal({ open, onClose, competitor }) {
+  const [name, setName] = useState('');
+  const [regions, setRegions] = useState([]);
+  const [da, setDa] = useState('');
+
+  if (!open) return null;
+
+  const initName = competitor?.name || competitor?.domain || '';
+  const initDa = competitor?.da ?? '';
+
   return (
+    <Modal open={open} onClose={onClose} title="Edit Competitor"
+      footer={
+        <>
+          <Btn variant="primary" onClick={onClose}>Save</Btn>
+          <Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn>
+        </>
+      }
+    >
+      <Input label="Name" placeholder="e.g. ISS International School" value={name || initName} onChange={setName} />
+      <CountryTagInput
+        label="Target Regions"
+        tags={regions}
+        onAdd={r => setRegions(prev => [...prev, r])}
+        onRemove={r => setRegions(prev => prev.filter(x => x !== r))}
+        placeholder="e.g. India, Singapore, USA"
+      />
+      <Input label="DA" placeholder="e.g. 45" value={da !== '' ? da : String(initDa)} onChange={setDa} />
+    </Modal>
+  );
+}
+
+function CompetitorsTab({ onSelectCompetitor }) {
+  const [editingIdx, setEditingIdx] = useState(null);
+
+  return (
+    <>
     <div style={{ overflowX: 'auto' }}>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
       <thead>
@@ -1219,6 +1339,7 @@ function CompetitorsTab({ onSelectCompetitor }) {
           <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Tot. KW's</th>
           <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>AI Comp. Level</th>
           <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>SERP Comp Level</th>
+          <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Comp Level</th>
           <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>dated</th>
           <th style={{ padding: '10px 16px' }}></th>
         </tr>
@@ -1254,19 +1375,23 @@ function CompetitorsTab({ onSelectCompetitor }) {
             </td>
             {/* Common KW's % */}
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {c.commonKw.toFixed(2)}%
+              {Math.round((c.commonKw / 100) * c.totalKw)}<span style={{ fontSize: 18, fontWeight: 300, margin: '0 1px' }}>/</span>{c.totalKw}
             </td>
             {/* Tot. KW's */}
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: c.totalKwChange > 0 ? 'var(--green)' : c.totalKwChange < 0 ? 'var(--red)' : 'var(--text-muted)' }}>
               {c.totalKwChange > 0 ? '↑' : c.totalKwChange < 0 ? '↓' : ''}{Math.abs(c.totalKwChange)}
             </td>
             {/* AI Comp. Level */}
-            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, fontWeight: 600, color: c.aiCompChange > 0 ? 'var(--green)' : c.aiCompChange < 0 ? 'var(--red)' : 'var(--text-muted)' }}>
-              {c.aiCompChange > 0 ? '↑' : c.aiCompChange < 0 ? '↓' : ''}{Math.abs(c.aiCompChange)}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {Math.min(c.aiCompLevel, 100)}%
             </td>
             {/* SERP Comp Level */}
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>
-              {c.serpCompLevel}
+              {Math.min(c.serpCompLevel, 100)}%
+            </td>
+            {/* Comp Level */}
+            <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {Math.min(c.compLevel, 100)}%
             </td>
             {/* Dated */}
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
@@ -1274,7 +1399,7 @@ function CompetitorsTab({ onSelectCompetitor }) {
             </td>
             {/* Edit */}
             <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-              <button onClick={e => e.stopPropagation()} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}
+              <button onClick={e => { e.stopPropagation(); setEditingIdx(i); }} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '5px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-hover)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
                 <Edit2 size={13} color="var(--text-muted)" />
@@ -1285,6 +1410,12 @@ function CompetitorsTab({ onSelectCompetitor }) {
       </tbody>
     </table>
     </div>
+    <EditCompetitorModal
+      open={editingIdx !== null}
+      onClose={() => setEditingIdx(null)}
+      competitor={editingIdx !== null ? COMPETITOR_ROWS[editingIdx] : null}
+    />
+    </>
   );
 }
 
@@ -1293,7 +1424,7 @@ function CompetitorsTab({ onSelectCompetitor }) {
 export default function ProjectSetupPage({ tab }) {
   const [activeTab, setActiveTab] = useState(tab || 'Domain');
   useEffect(() => { if (tab) { setActiveTab(tab); setSelectedPageProject(null); setSelectedCompetitor(null); } }, [tab]);
-  const [filter, setFilter] = useState('All targets');
+  const [filter, setFilter] = useState(null);
   const [search, setSearch] = useState('');
   const [projects, setProjects] = useState(INITIAL_PROJECTS);
   const [pages, setPages] = useState(INITIAL_PAGES);
@@ -1324,6 +1455,7 @@ export default function ProjectSetupPage({ tab }) {
       targetDir: null,
       blogPages: 0,
       updated: 'Just now',
+      targetPlatforms: ALL_PLATFORMS,
     }]);
 
     setPages(prev => [...prev, {
@@ -1362,7 +1494,7 @@ export default function ProjectSetupPage({ tab }) {
     }]);
   };
 
-  const filterTabs = ['All targets', 'AI Search', 'SEO'];
+  const filterTabs = ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'];
 
   const ctaByTab = {
     Domain: { label: 'Create project', onClick: () => setShowCreate(true) },
@@ -1424,46 +1556,81 @@ export default function ProjectSetupPage({ tab }) {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Project name or domain"
+              placeholder={activeTab === 'Pages' && selectedPageProject !== null ? 'Page name or url' : 'Project name or domain'}
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text-primary)', width: '100%' }}
             />
           </div>
 
-          {/* Filter pills */}
-          <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            {filterTabs.map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                fontFamily: 'var(--font-body)', transition: 'all 0.15s',
-                background: filter === f ? '#0f1523' : '#fff',
-                color: filter === f ? '#fff' : 'var(--text-secondary)',
-                borderRight: f !== 'SEO' ? '1px solid var(--border)' : 'none',
-              }}>{f}</button>
-            ))}
-          </div>
+          {/* Filter pills — Domain tab only */}
+          {activeTab === 'Domain' && (
+            <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              {filterTabs.map(f => (
+                <button key={f} onClick={() => setFilter(prev => prev === f ? null : f)} style={{
+                  padding: '7px 16px', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+                  fontFamily: 'var(--font-body)', transition: 'all 0.15s',
+                  background: filter === f ? '#0f1523' : '#fff',
+                  color: filter === f ? '#fff' : 'var(--text-secondary)',
+                  borderRight: f !== 'Gemini' ? '1px solid var(--border)' : 'none',
+                }}>{f}</button>
+              ))}
+            </div>
+          )}
 
           <div style={{ flex: 1 }} />
 
           {/* CTA */}
-          <button
-            onClick={cta.onClick}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: '#0f1523', color: '#fff', border: 'none', borderRadius: 8,
-              padding: '8px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'var(--font-body)', transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >
-            <Plus size={15} />
-            {cta.label}
-          </button>
+          {activeTab === 'Competitors' ? (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setShowAddCompetitors(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: '#0f1523', color: '#fff', border: 'none', borderRadius: 8,
+                  padding: '8px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <Plus size={15} />
+                Add Competitors
+              </button>
+              <button
+                onClick={() => setShowAddPages(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: '#fff', color: '#0f1523', border: '1.5px solid #0f1523', borderRadius: 8,
+                  padding: '8px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.75'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <Plus size={15} />
+                Add Pages
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={cta.onClick}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: '#0f1523', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '8px 18px', fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
+                fontFamily: 'var(--font-body)', transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              <Plus size={15} />
+              {cta.label}
+            </button>
+          )}
         </div>
 
         {/* Table */}
         <div style={{ overflowX: 'auto' }}>
-          {activeTab === 'Domain' && <DomainTab projects={projects} />}
+          {activeTab === 'Domain' && <DomainTab projects={projects} filter={filter} />}
           {activeTab === 'Pages' && selectedPageProject !== null ? (
             <PageDetailView
               project={pages[selectedPageProject]}
