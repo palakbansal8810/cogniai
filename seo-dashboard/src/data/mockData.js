@@ -204,6 +204,21 @@ export const derivedPages = (() => {
     });
 })();
 
+// ── KW Cluster detail rows (from KW Dump) ────────────────────────────
+export const derivedKeywordClusters = allKeywords.map(k => ({
+  kw: k.keyword,
+  sv: k.volume,
+  kwDiff: k.kd,
+  type: 'Organic',
+  cluster: k.cluster,
+  category: k.category,
+  targetType: k.target === 'Topical Blog' ? 'Topical Blogs' : (k.target === 'Landing Page' ? 'Landing Page' : 'Blogs'),
+  targetSubtype: k.intent.toLowerCase().includes('commercial') ? 'Commercial' : 'Informational',
+  targetGeo: k.geo,
+  priority: '',
+  landingPage: '',
+}));
+
 export const projectSetupData = {
   totalKeywords: allKeywords.length,
   landingPageCount: landingKws.length,

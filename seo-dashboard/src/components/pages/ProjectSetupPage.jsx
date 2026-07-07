@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, X, ChevronDown, Edit2, HelpCircle, Upload, Check, Monitor, Globe, ArrowLeft, Trash2 } from 'lucide-react';
+import { Search, Plus, X, ChevronDown, ChevronLeft, ChevronRight, Edit2, HelpCircle, Upload, Check, Monitor, Globe, ArrowLeft, Trash2 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { Badge } from '../ui/Card';
-import { derivedPages, projectSetupData, competitorData, brandMentionKeywords } from '../../data/mockData';
+import { derivedPages, projectSetupData, brandMentionKeywords } from '../../data/mockData';
+import {
+  fetchDomainRows, createProject, updateDomainRow, deleteDomainRow,
+  fetchKwProjects, fetchKeywordRows, updateKeywordRow, bulkDeleteKeywordRows,
+} from '../../lib/projectsApi';
 
 // ─── shared tiny components ────────────────────────────────────────────────
 
@@ -274,6 +279,8 @@ function CreateProjectModal({ open, onClose, onCreateProject }) {
   const [userType, setUserType] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [users, setUsers] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
 
   const platformOptions = [
     { value: 'ai_mode', label: 'AI Mode' },
@@ -300,27 +307,38 @@ function CreateProjectModal({ open, onClose, onCreateProject }) {
   const resetForm = () => {
     setDomain(''); setName(''); setShare(false); setRegions([]);
     setPlatforms([]); setDa(''); setUserType(''); setUserEmail(''); setUsers([]);
+    setSubmitting(false); setApiError('');
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!domain.trim()) return;
-    onCreateProject({
-      domain: domain.trim(),
-      name: name.trim() || domain.trim(),
-      regions,
-      platforms,
-      da: da || null,
-      users,
-      share,
-    });
-    resetForm();
-    onClose();
+    setSubmitting(true);
+    setApiError('');
+    try {
+      await onCreateProject({
+        domain: domain.trim(),
+        name: name.trim() || domain.trim(),
+        regions,
+        platforms,
+        da: da || null,
+        users,
+        share,
+      });
+      resetForm();
+      onClose();
+    } catch (err) {
+      setSubmitting(false);
+      setApiError(err.message || 'Failed to create project.');
+    }
   };
 
   return (
     <Modal open={open} onClose={onClose} title="Create project"
-      footer={<><Btn variant="primary" onClick={handleCreate}>Create SEO project</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
+      footer={<><Btn variant="primary" onClick={handleCreate} style={submitting ? { opacity: 0.6, pointerEvents: 'none' } : {}}>{submitting ? 'Creating…' : 'Create SEO project'}</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
     >
+      {apiError && (
+        <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{apiError}</span>
+      )}
       <Input label="Domain" hint="domain" placeholder="domain.com" value={domain} onChange={setDomain} />
       <Input label="Project Name" placeholder="Auto-generated if left blank" value={name} onChange={setName} />
       <div style={{ height: 1, background: 'var(--border)' }} />
@@ -384,7 +402,7 @@ function CreateProjectModal({ open, onClose, onCreateProject }) {
 
 // ─── Add Pages Modal ─────────────────────────────────────────────────────────
 
-function AddPagesModal({ open, onClose, projects, onImportPages }) {
+function AddPagesModal({ open, onClose, projects, onImportPages, lockedProject }) {
   const [clustered, setClustered] = useState(false);
   const [project, setProject] = useState('');
   const [share, setShare] = useState(false);
@@ -405,9 +423,15 @@ function AddPagesModal({ open, onClose, projects, onImportPages }) {
   };
 
   const parseExcel = (buffer) => {
-    const view = new Uint8Array(buffer);
-    const text = new TextDecoder().decode(view);
-    return parseDelimited(text, ',');
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    return rows.slice(1).map(cols => ({
+      pageName: String(cols[0] ?? '').trim(),
+      url: String(cols[1] ?? '').trim(),
+      cluster: String(cols[2] ?? '').trim(),
+      category: String(cols[3] ?? '').trim(),
+    })).filter(r => r.pageName || r.url);
   };
 
   const handleFileUpload = (file) => {
@@ -439,6 +463,20 @@ function AddPagesModal({ open, onClose, projects, onImportPages }) {
   };
 
   const handleImport = () => {
+    if (lockedProject) {
+      if (csvRows.length === 0) return;
+      onImportPages({
+        domain: lockedProject.domain,
+        name: lockedProject.name,
+        targetIndex: lockedProject.index,
+        clustered,
+        pages: csvRows,
+        share,
+      });
+      resetForm();
+      onClose();
+      return;
+    }
     if (!project && csvRows.length === 0) return;
     const matchedProject = projects.find(p => p.domain === project);
     onImportPages({
@@ -453,20 +491,28 @@ function AddPagesModal({ open, onClose, projects, onImportPages }) {
     onClose();
   };
 
+  const canImport = lockedProject ? csvRows.length > 0 : true;
+
   return (
     <Modal open={open} onClose={onClose} title="Add Pages"
-      footer={<><Btn variant="primary" onClick={handleImport}>Import Pages</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
+      footer={<><Btn variant="primary" onClick={handleImport} style={canImport ? {} : { opacity: 0.5, pointerEvents: 'none' }}>Import Pages</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
     >
-      <Select
-        label="Choose Project"
-        placeholder="Select a project"
-        value={project}
-        onChange={setProject}
-        options={projectOptions}
-      />
+      {lockedProject ? (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          Adding pages to <strong style={{ color: 'var(--text-primary)' }}>{lockedProject.name}</strong>
+        </div>
+      ) : (
+        <Select
+          label="Choose Project"
+          placeholder="Select a project"
+          value={project}
+          onChange={setProject}
+          options={projectOptions}
+        />
+      )}
 
 
-      <Checkbox label="Clustered" checked={clustered} onChange={setClustered} />
+      <Checkbox label="Is this project's keywords already clustered?" checked={clustered} onChange={setClustered} />
       <div style={{ height: 1, background: 'var(--border)' }} />
 
       {/* Import Pages section */}
@@ -508,6 +554,247 @@ function AddPagesModal({ open, onClose, projects, onImportPages }) {
   );
 }
 
+// ─── Add Keywords Modal ──────────────────────────────────────────────────────
+
+const CATEGORY_API_BASE = 'https://seo-backend-fqlp.onrender.com';
+const CATEGORY_JOB_API = `${CATEGORY_API_BASE}/jobs/category`;
+const CATEGORY_JOBS_STORAGE_KEY = 'seo-dashboard:pending-category-jobs';
+
+const loadPendingCategoryJobs = () => {
+  try {
+    return JSON.parse(localStorage.getItem(CATEGORY_JOBS_STORAGE_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const savePendingCategoryJobs = (jobs) => {
+  try {
+    localStorage.setItem(CATEGORY_JOBS_STORAGE_KEY, JSON.stringify(jobs));
+  } catch {
+    // storage unavailable, ignore
+  }
+};
+
+function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedProject }) {
+  const [project, setProject] = useState('');
+  const [share, setShare] = useState(false);
+  const [csvRows, setCsvRows] = useState([]);
+  const [fileName, setFileName] = useState('');
+  const [rawFile, setRawFile] = useState(null);
+  const [clustered, setClustered] = useState(false);
+  const [country, setCountry] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
+
+  const projectOptions = projects
+    .filter(p => p.name)
+    .map(p => ({ value: p.domain, label: p.name }));
+
+  const toRow = (cols) => ({
+    kw: String(cols[0] ?? '').trim(),
+    sv: cols[1] !== undefined && cols[1] !== '' ? Number(cols[1]) || 0 : '',
+    kwDiff: cols[2] !== undefined && cols[2] !== '' ? Number(cols[2]) || 0 : '',
+    type: String(cols[3] ?? '').trim(),
+    cluster: String(cols[4] ?? '').trim(),
+    category: String(cols[5] ?? '').trim(),
+    targetType: String(cols[6] ?? '').trim(),
+    targetSubtype: String(cols[7] ?? '').trim(),
+    targetGeo: String(cols[8] ?? '').trim(),
+    priority: String(cols[9] ?? '').trim(),
+    landingPage: String(cols[10] ?? '').trim(),
+  });
+
+  const parseDelimited = (text, delimiter) => {
+    const lines = text.split('\n').filter(l => l.trim());
+    if (lines.length < 2) return [];
+    return lines.slice(1)
+      .map(line => toRow(line.split(delimiter).map(c => c.trim().replace(/^"|"$/g, ''))))
+      .filter(r => r.kw);
+  };
+
+  const parseExcel = (buffer) => {
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    return rows.slice(1).map(toRow).filter(r => r.kw);
+  };
+
+  const handleFileUpload = (file) => {
+    if (!file) return;
+    setFileName(file.name);
+    setRawFile(file);
+    setApiError('');
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      const reader = new FileReader();
+      reader.onload = (e) => setCsvRows(parseExcel(e.target.result));
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const delimiter = ext === 'tsv' ? '\t' : ',';
+        setCsvRows(parseDelimited(e.target.result, delimiter));
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const resetForm = () => {
+    setProject(''); setShare(false); setCsvRows([]); setFileName('');
+    setRawFile(null); setClustered(false); setCountry(''); setApiError('');
+  };
+
+  const runCategoryJob = async () => {
+    const projectName = lockedProject ? lockedProject.name : (projects.find(p => p.domain === project)?.name || project);
+    const formData = new FormData();
+    formData.append('file', rawFile);
+    formData.append('country', country);
+    formData.append('project', projectName);
+    const res = await fetch(CATEGORY_JOB_API, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.detail?.[0]?.msg || body?.detail || 'Failed to start categorization job.');
+    }
+    return res.json();
+  };
+
+  const finishImport = (jobId) => {
+    if (lockedProject) {
+      onImportKeywords({
+        domain: lockedProject.domain,
+        name: lockedProject.name,
+        targetIndex: lockedProject.index,
+        keywords: csvRows,
+        share,
+        jobId,
+        country: jobId ? country : undefined,
+      });
+    } else {
+      const matchedProject = projects.find(p => p.domain === project);
+      onImportKeywords({
+        domain: project,
+        name: matchedProject?.name || project,
+        keywords: csvRows,
+        share,
+        jobId,
+        country: jobId ? country : undefined,
+      });
+    }
+    resetForm();
+    onClose();
+  };
+
+  const handleImport = async () => {
+    if (lockedProject) {
+      if (csvRows.length === 0) return;
+    } else if (!project && csvRows.length === 0) {
+      return;
+    }
+
+    let jobId;
+    if (!clustered) {
+      if (!rawFile || !country) return;
+      setApiError('');
+      setSubmitting(true);
+      try {
+        const job = await runCategoryJob();
+        jobId = job.job_id;
+      } catch (err) {
+        setSubmitting(false);
+        setApiError(err.message || 'Failed to start categorization job.');
+        return;
+      }
+      setSubmitting(false);
+    }
+
+    finishImport(jobId);
+  };
+
+  const canImport = (lockedProject ? csvRows.length > 0 : true) && (clustered || (!!rawFile && !!country)) && !submitting;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add Keywords"
+      footer={<><Btn variant="primary" onClick={handleImport} style={canImport ? {} : { opacity: 0.5, pointerEvents: 'none' }}>{submitting ? 'Starting categorization…' : 'Import Keywords'}</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
+    >
+      {lockedProject ? (
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+          Adding keywords to <strong style={{ color: 'var(--text-primary)' }}>{lockedProject.name}</strong>
+        </div>
+      ) : (
+        <Select
+          label="Choose Project"
+          placeholder="Select a project"
+          value={project}
+          onChange={setProject}
+          options={projectOptions}
+        />
+      )}
+
+      <Checkbox label="Is this project's keywords already clustered?" checked={clustered} onChange={setClustered} />
+
+      {!clustered && (
+        <Select
+          label="Country"
+          placeholder="Select a country"
+          value={country}
+          onChange={setCountry}
+          options={COUNTRIES}
+        />
+      )}
+
+      {!clustered && !rawFile && (
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+          Not clustered yet — after import we'll send the uploaded file and country to the categorization service to cluster these keywords.
+        </span>
+      )}
+
+      {apiError && (
+        <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{apiError}</span>
+      )}
+
+      <div style={{ height: 1, background: 'var(--border)' }} />
+
+      {/* Import Keywords section */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Import Keywords</span>
+        <input
+          type="file"
+          accept=".csv,.tsv,.xls,.xlsx"
+          id="kw-upload"
+          style={{ display: 'none' }}
+          onChange={e => { handleFileUpload(e.target.files[0]); e.target.value = ''; }}
+        />
+        <div
+          style={{ border: `2px dashed ${fileName ? 'var(--accent)' : '#d1d5db'}`, borderRadius: 10, padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, background: fileName ? 'var(--accent-light)' : 'var(--surface-2)', cursor: 'pointer' }}
+          onClick={() => document.getElementById('kw-upload').click()}
+          onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)'; }}
+          onDragLeave={e => { e.currentTarget.style.borderColor = fileName ? 'var(--accent)' : '#d1d5db'; }}
+          onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)'; handleFileUpload(e.dataTransfer.files[0]); }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+          onMouseLeave={e => { if (!fileName) e.currentTarget.style.borderColor = '#d1d5db'; }}
+        >
+          {fileName ? (
+            <>
+              <Check size={20} color="var(--accent)" />
+              <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>{fileName}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{csvRows.length} keyword{csvRows.length !== 1 ? 's' : ''} found</span>
+            </>
+          ) : (
+            <>
+              <Upload size={20} color="var(--text-muted)" />
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Click to upload or drag a file</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>CSV, TSV, Excel · Columns: KW, SV, KW Diff, Type, Cluster, Category, Target Type, Target Subtype, Target Geo, Priority, Landing Page</span>
+            </>
+          )}
+        </div>
+      </div>
+
+    </Modal>
+  );
+}
+
 // ─── Add Competitors Modal ───────────────────────────────────────────────────
 
 function AddCompetitorsModal({ open, onClose }) {
@@ -539,7 +826,6 @@ function AddCompetitorsModal({ open, onClose }) {
 
 // ─── Table rows data ─────────────────────────────────────────────────────────
 
-const targetPageCount = derivedPages.filter(p => p.targetCategory === 'Landing Page').length;
 const blogPageCount = derivedPages.filter(p => p.targetCategory === 'Topical Blog').length;
 
 const ALL_PLATFORMS = ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'];
@@ -552,12 +838,6 @@ const PLATFORM_BADGE_STYLES = {
   'Gemini':      { bg: '#fce7f3', color: '#9d174d' },
 };
 
-const INITIAL_PROJECTS = [
-  { name: 'OWIS Singapore', domain: 'owis.org', device: 'desktop', location: 'Singapore', locationIcon: 'desktop', traffic: '44.29%', trafficDir: null, da: null, keywords: projectSetupData.totalKeywords, keywordsDir: 'up', targetPages: targetPageCount, targetDir: 'up', blogPages: blogPageCount, updated: '20h ago', targetPlatforms: ['Google', 'AI Mode'] },
-  { name: 'owis.org', domain: 'owis.org', device: 'ai', location: 'Singapore', locationIcon: 'ai', traffic: '2.40%', trafficDir: 'up', da: null, keywords: brandMentionKeywords.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: projectSetupData.aiMentionCount, updated: '19h ago', targetPlatforms: ['AI Overview', 'ChatGPT'] },
-  { name: 'Cogni', domain: 'cogni.org', device: 'google', location: 'Singapore', locationIcon: 'google', traffic: '10.44%', trafficDir: 'up', da: null, keywords: competitorData.length, keywordsDir: 'up', targetPages: 0, targetDir: null, blogPages: 3, updated: '18h ago', targetPlatforms: ['Google'] },
-];
-
 const DeviceIcon = ({ type }) => {
   if (type === 'desktop') return <Monitor size={14} color="#5a6478" />;
   if (type === 'ai') return <span style={{ fontSize: 13 }}>✦</span>;
@@ -567,10 +847,148 @@ const DeviceIcon = ({ type }) => {
 
 // ─── Tab configurations ───────────────────────────────────────────────────────
 
-const TABS = ['Domain', 'Pages', 'Competitors', 'Outreach', 'Connectors'];
+const TABS = ['Domain', 'KW Cluster', 'Pages', 'Competitors', 'Outreach', 'Connectors'];
 
-function DomainTab({ projects, filter }) {
+const platformOptionsList = [
+  { value: 'AI Mode', label: 'AI Mode' },
+  { value: 'AI Overview', label: 'AI Overview' },
+  { value: 'Google', label: 'Google' },
+  { value: 'ChatGPT', label: 'ChatGPT' },
+  { value: 'Gemini', label: 'Gemini' },
+];
+
+function EditDomainModal({ open, onClose, project, onSave, onDelete }) {
+  const [name, setName] = useState('');
+  const [location, setLocation] = useState('');
+  const [platforms, setPlatforms] = useState([]);
+  const [da, setDa] = useState('');
+  const [traffic, setTraffic] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [targetPages, setTargetPages] = useState('');
+  const [blogPages, setBlogPages] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [apiError, setApiError] = useState('');
+
+  useEffect(() => {
+    if (project) {
+      setName(project.name || '');
+      setLocation(project.location || '');
+      setPlatforms(project.targetPlatforms || ALL_PLATFORMS);
+      setDa(project.da ?? '');
+      setTraffic(project.traffic ?? '');
+      setKeywords(project.keywords ?? '');
+      setTargetPages(project.targetPages ?? '');
+      setBlogPages(project.blogPages ?? '');
+      setConfirmDelete(false);
+      setSubmitting(false);
+      setApiError('');
+    }
+  }, [project]);
+
+  if (!open) return null;
+
+  const togglePlatform = (v) => setPlatforms(p => p.includes(v) ? p.filter(x => x !== v) : [...p, v]);
+
+  const handleClose = () => { setConfirmDelete(false); onClose(); };
+
+  const handleSave = async () => {
+    setSubmitting(true);
+    setApiError('');
+    try {
+      await onSave({
+        name: name.trim() || project?.name,
+        location,
+        targetPlatforms: platforms,
+        da: da !== '' ? Number(da) : null,
+        traffic: traffic !== '' ? Number(traffic) : 0,
+        keywords: keywords !== '' ? Number(keywords) : 0,
+        targetPages: targetPages !== '' ? Number(targetPages) : 0,
+        blogPages: blogPages !== '' ? Number(blogPages) : 0,
+      });
+      handleClose();
+    } catch (err) {
+      setSubmitting(false);
+      setApiError(err.message || 'Failed to save project.');
+    }
+  };
+
+  const handleDelete = async () => {
+    setSubmitting(true);
+    setApiError('');
+    try {
+      await onDelete?.();
+      handleClose();
+    } catch (err) {
+      setSubmitting(false);
+      setApiError(err.message || 'Failed to delete project.');
+    }
+  };
+
+  if (confirmDelete) {
+    return (
+      <Modal open={open} onClose={handleClose} title="Delete Project"
+        footer={<>
+          <Btn variant="primary" onClick={handleDelete} style={submitting ? { background: 'var(--red)', opacity: 0.6, pointerEvents: 'none' } : { background: 'var(--red)' }}>{submitting ? 'Deleting…' : 'Delete'}</Btn>
+          <Btn variant="outline" onClick={() => setConfirmDelete(false)} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn>
+        </>}
+      >
+        {apiError && (
+          <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{apiError}</span>
+        )}
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          Are you sure you want to delete <strong>{project?.name || project?.domain}</strong>? This action cannot be undone.
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal open={open} onClose={handleClose} title="Edit Project"
+      footer={<>
+        <Btn variant="primary" onClick={handleSave} style={submitting ? { opacity: 0.6, pointerEvents: 'none' } : {}}>{submitting ? 'Saving…' : 'Save'}</Btn>
+        <Btn variant="outline" onClick={handleClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn>
+        <Btn variant="outline" onClick={() => setConfirmDelete(true)} style={{ flex: 'none', padding: '10px 16px', border: '1.5px solid var(--red)', color: 'var(--red)' }}>Delete</Btn>
+      </>}
+    >
+      {apiError && (
+        <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{apiError}</span>
+      )}
+      <Input label="Project Name" placeholder="e.g. OWIS Singapore" value={name} onChange={setName} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Domain</span>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 8, border: '1.5px solid var(--border)' }}>
+          {project?.domain}
+        </div>
+      </div>
+
+      <Select
+        label="Location"
+        placeholder="Select a location"
+        value={location}
+        onChange={setLocation}
+        options={COUNTRIES}
+      />
+
+      <MultiSelect
+        label="Target Platforms"
+        options={platformOptionsList}
+        selected={platforms}
+        onToggle={togglePlatform}
+      />
+
+      <Input label="Domain Authority" placeholder="e.g. 42" value={da} onChange={setDa} type="number" />
+      <Input label="Traffic" placeholder="e.g. 44.29" value={traffic} onChange={setTraffic} type="number" />
+      <Input label="Keywords" placeholder="e.g. 120" value={keywords} onChange={setKeywords} type="number" />
+      <Input label="Target Pages" placeholder="e.g. 10" value={targetPages} onChange={setTargetPages} type="number" />
+      <Input label="Blog Pages" placeholder="e.g. 25" value={blogPages} onChange={setBlogPages} type="number" />
+    </Modal>
+  );
+}
+
+function DomainTab({ projects, filter, onUpdateProject, onDeleteProject, loading, error }) {
   const [expandedRows, setExpandedRows] = useState(new Set());
+  const [editingProject, setEditingProject] = useState(null);
 
   const toggleRow = (i) => setExpandedRows(prev => {
     const next = new Set(prev);
@@ -583,6 +1001,7 @@ function DomainTab({ projects, filter }) {
     : projects;
 
   return (
+    <>
     <div style={{ overflowX: 'auto' }}>
     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 900 }}>
       <thead>
@@ -597,7 +1016,13 @@ function DomainTab({ projects, filter }) {
         </tr>
       </thead>
       <tbody>
-        {visibleProjects.map((p, i) => (
+        {loading ? (
+          <tr><td colSpan={10} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading projects…</td></tr>
+        ) : error ? (
+          <tr><td colSpan={10} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--red, #dc2626)', fontSize: 13 }}>{error}</td></tr>
+        ) : visibleProjects.length === 0 ? (
+          <tr><td colSpan={10} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No projects yet. Click <strong>+ Create project</strong> to get started.</td></tr>
+        ) : visibleProjects.map((p, i) => (
           <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
             onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -670,7 +1095,7 @@ function DomainTab({ projects, filter }) {
             <td style={{ padding: '14px 16px', textAlign: 'right', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{p.updated}</td>
             <td style={{ padding: '14px 16px', textAlign: 'right' }}>
               <button
-                onClick={() => setEditingIdx(i)}
+                onClick={() => setEditingProject(p)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}>
@@ -682,10 +1107,17 @@ function DomainTab({ projects, filter }) {
       </tbody>
     </table>
     </div>
+    <EditDomainModal
+      open={editingProject !== null}
+      onClose={() => setEditingProject(null)}
+      project={editingProject}
+      onSave={(updates) => onUpdateProject?.(editingProject, updates)}
+      onDelete={() => onDeleteProject?.(editingProject)}
+    />
+    </>
   );
 }
 const commercialPages = derivedPages.filter(p => p.targetType.toLowerCase().includes('commercial')).length;
-const commercialPct = derivedPages.length > 0 ? Math.round((commercialPages / derivedPages.length) * 100) : 0;
 
 const INITIAL_PAGES = [
   {
@@ -694,7 +1126,7 @@ const INITIAL_PAGES = [
     locationIcon: 'desktop',
     location: 'Singapore',
     totalPages: derivedPages.length,
-    commercialPct: `${commercialPct}%`,
+    commercialPct: `${commercialPages}/${derivedPages.length}`,
     blogPages: blogPageCount,
     blogDir: 'up',
     keywords: projectSetupData.totalKeywords,
@@ -732,7 +1164,7 @@ const INITIAL_PAGES = [
   },
 ];
 
-function PagesTab({ pages, onSelectProject }) {
+function PagesTab({ pages, onSelectProject, loading, error }) {
 
   return (
     <>
@@ -759,15 +1191,28 @@ function PagesTab({ pages, onSelectProject }) {
             </tr>
           </thead>
           <tbody>
-            {pages.map((p, i) => (
+            {loading ? (
+              <tr><td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</td></tr>
+            ) : error ? (
+              <tr><td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--red, #dc2626)', fontSize: 13 }}>{error}</td></tr>
+            ) : pages.length === 0 ? (
+              <tr><td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No projects yet.</td></tr>
+            ) : pages.map((p, i) => (
               <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <td style={{ padding: '14px 16px' }}>
                   {p.name && (
-                    <div onClick={() => onSelectProject(i)} style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', marginBottom: 2, cursor: 'pointer' }}
+                    <div onClick={() => onSelectProject(i)} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, color: 'var(--accent)', marginBottom: 2, cursor: 'pointer' }}
                       onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
-                      onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>{p.name}</div>
+                      onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}>
+                      {p.name}
+                      {p.categorizationStatus === 'running' && (
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-light)', borderRadius: 99, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                          Categorizing…
+                        </span>
+                      )}
+                    </div>
                   )}
                   {p.domain && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.domain}</div>}
                   {p.name && <div style={{ marginTop: 4, fontSize: 16, color: 'var(--border)' }}></div>}
@@ -839,17 +1284,29 @@ function EditPageModal({ open, onClose, page, onSave }) {
   );
 }
 
-function BulkEditModal({ open, onClose, count, onApply }) {
+const PAGE_BULK_FIELDS = [
+  { value: 'cluster', label: 'Cluster', type: 'text' },
+  { value: 'category', label: 'Category', type: 'text' },
+  { value: 'targetCategory', label: 'Target Category', type: 'select', options: ['Landing Page', 'Topical Blog'] },
+  { value: 'targetType', label: 'Target Type', type: 'select', options: ['Commercial', 'Informational', 'Informational/Commercial', 'Transactional', 'Navigational'] },
+];
+
+const KW_BULK_FIELDS = [
+  { value: 'cluster', label: 'Cluster', type: 'text' },
+  { value: 'category', label: 'Category', type: 'text' },
+  { value: 'type', label: 'Type', type: 'select', options: ['Organic', 'Local', 'SERP'] },
+  { value: 'targetType', label: 'Target Type', type: 'select', options: ['Blogs', 'Landing Page', 'Topical Blogs'] },
+  { value: 'targetSubtype', label: 'Target Subtype', type: 'select', options: ['Informational', 'Commercial'] },
+  { value: 'targetGeo', label: 'Target Geo', type: 'text' },
+  { value: 'priority', label: 'Priority', type: 'select', options: ['P1', 'P2', 'P3', 'P4', 'P5'] },
+  { value: 'landingPage', label: 'Landing Page (URL)', type: 'text' },
+];
+
+function BulkEditModal({ open, onClose, count, onApply, fields }) {
   const [field, setField] = useState('');
   const [value, setValue] = useState('');
 
-  const FIELDS = [
-    { value: 'cluster', label: 'Cluster', type: 'text' },
-    { value: 'category', label: 'Category', type: 'text' },
-    { value: 'targetCategory', label: 'Target Category', type: 'select', options: ['Landing Page', 'Topical Blog'] },
-    { value: 'targetType', label: 'Target Type', type: 'select', options: ['Commercial', 'Informational', 'Informational/Commercial', 'Transactional', 'Navigational'] },
-  ];
-
+  const FIELDS = fields || PAGE_BULK_FIELDS;
   const selectedField = FIELDS.find(f => f.value === field);
 
   const handleApply = () => {
@@ -958,12 +1415,26 @@ function ActionsDropdown({ selectedCount, onBulkEdit, onBulkDelete }) {
   );
 }
 
+function HeaderQuickSelect({ placeholder, options, onSet }) {
+  return (
+    <select value="" onChange={e => { if (e.target.value) onSet(e.target.value); }}
+      style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 28px 5px 10px', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', color: 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center`, cursor: 'pointer', outline: 'none', minWidth: 130, letterSpacing: '0.3px' }}>
+      <option value="">{placeholder}</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
 function PageDetailView({ project, onBack, onUpdatePages }) {
   const [rows, setRows] = useState(project.detailPages || []);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [editingPage, setEditingPage] = useState(null);
+
+  useEffect(() => {
+    setRows(project.detailPages || []);
+  }, [project]);
 
   const allSelected = rows.length > 0 && selectedRows.size === rows.length;
   const someSelected = selectedRows.size > 0 && selectedRows.size < rows.length;
@@ -1049,7 +1520,7 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{rows.length} page{rows.length !== 1 ? 's' : ''}</span>
       </div>
 
-      <BulkEditModal open={showBulkEdit} onClose={() => setShowBulkEdit(false)} count={selectedRows.size} onApply={handleBulkEditApply} />
+      <BulkEditModal open={showBulkEdit} onClose={() => setShowBulkEdit(false)} count={selectedRows.size} onApply={handleBulkEditApply} fields={PAGE_BULK_FIELDS} />
       <BulkDeleteModal open={showBulkDelete} onClose={() => setShowBulkDelete(false)} count={selectedRows.size} onConfirm={handleBulkDelete} />
 
       <div style={{ overflowX: 'auto' }}>
@@ -1075,23 +1546,10 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
               <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h}</th>
             ))}
             <th style={{ padding: '6px 16px', textAlign: 'left' }}>
-              <select value="" onChange={e => { if (e.target.value) bulkUpdate('targetCategory', e.target.value); }}
-                style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 28px 5px 10px', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', color: 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center`, cursor: 'pointer', outline: 'none', minWidth: 130, letterSpacing: '0.3px' }}>
-                <option value="">Target Category</option>
-                <option value="Landing Page">Landing Page</option>
-                <option value="Topical Blog">Topical Blog</option>
-              </select>
+              <HeaderQuickSelect placeholder="Target Category" options={['Landing Page', 'Topical Blog']} onSet={v => bulkUpdate('targetCategory', v)} />
             </th>
             <th style={{ padding: '6px 16px', textAlign: 'left' }}>
-              <select value="" onChange={e => { if (e.target.value) bulkUpdate('targetType', e.target.value); }}
-                style={{ appearance: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 28px 5px 10px', fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-body)', color: 'var(--text-muted)', background: `#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center`, cursor: 'pointer', outline: 'none', minWidth: 130, letterSpacing: '0.3px' }}>
-                <option value="">Target Type</option>
-                <option value="Commercial">Commercial</option>
-                <option value="Informational">Informational</option>
-                <option value="Informational/Commercial">Info/Commercial</option>
-                <option value="Transactional">Transactional</option>
-                <option value="Navigational">Navigational</option>
-              </select>
+              <HeaderQuickSelect placeholder="Target Type" options={['Commercial', 'Informational', 'Informational/Commercial', 'Transactional', 'Navigational']} onSet={v => bulkUpdate('targetType', v)} />
             </th>
             <th style={{ padding: '10px 16px' }}></th>
           </tr>
@@ -1134,6 +1592,318 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
           ))}
         </tbody>
       </table>
+      </div>
+    </div>
+  );
+}
+
+const KW_PAGE_SIZE = 100;
+
+function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCategorization, search }) {
+  const [rows, setRows] = useState(project.detailKeywords || []);
+  const loading = project.detailKeywords === undefined;
+  const error = project.detailKeywordsError || '';
+  const [selectedRows, setSelectedRows] = useState(new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pendingUpdates, setPendingUpdates] = useState(new Map());
+  const [pendingDeleteIds, setPendingDeleteIds] = useState(new Set());
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const hasPendingChanges = pendingUpdates.size > 0 || pendingDeleteIds.size > 0;
+
+  const filteredIndices = rows
+    .map((_, i) => i)
+    .filter(i => !search || rows[i].kw?.toLowerCase().includes(search.toLowerCase()));
+
+  const pageCount = Math.max(1, Math.ceil(filteredIndices.length / KW_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pagedIndices = filteredIndices.slice((safePage - 1) * KW_PAGE_SIZE, safePage * KW_PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, project]);
+
+  const handleRefreshClick = async () => {
+    setRefreshing(true);
+    try {
+      await onRefreshCategorization?.();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    setRows(project.detailKeywords || []);
+    setPendingUpdates(new Map());
+    setPendingDeleteIds(new Set());
+    setSaveError('');
+  }, [project]);
+
+  const allSelected = pagedIndices.length > 0 && pagedIndices.every(i => selectedRows.has(i));
+  const someSelected = !allSelected && pagedIndices.some(i => selectedRows.has(i));
+
+  const toggleAll = () => {
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (allSelected) pagedIndices.forEach(i => next.delete(i));
+      else pagedIndices.forEach(i => next.add(i));
+      return next;
+    });
+  };
+
+  const toggleRow = (idx) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const stageUpdates = (ids, field, value) => {
+    setPendingUpdates(prev => {
+      const next = new Map(prev);
+      ids.forEach(id => next.set(id, { ...(next.get(id) || {}), [field]: value }));
+      return next;
+    });
+  };
+
+  const deleteRow = (idx) => {
+    const id = rows[idx].id;
+    setPendingDeleteIds(prev => new Set(prev).add(id));
+    setPendingUpdates(prev => { if (!prev.has(id)) return prev; const next = new Map(prev); next.delete(id); return next; });
+    setRows(rows.filter((_, i) => i !== idx));
+  };
+
+  const bulkUpdate = (field, value) => {
+    stageUpdates(rows.map(r => r.id), field, value);
+    setRows(rows.map(r => ({ ...r, [field]: value })));
+  };
+
+  const handleBulkEditApply = (field, value) => {
+    stageUpdates(rows.filter((_, i) => selectedRows.has(i)).map(r => r.id), field, value);
+    setRows(rows.map((r, i) => selectedRows.has(i) ? { ...r, [field]: value } : r));
+    setSelectedRows(new Set());
+  };
+
+  const handleBulkDelete = () => {
+    const ids = rows.filter((_, i) => selectedRows.has(i)).map(r => r.id);
+    setPendingDeleteIds(prev => { const next = new Set(prev); ids.forEach(id => next.add(id)); return next; });
+    setPendingUpdates(prev => { const next = new Map(prev); ids.forEach(id => next.delete(id)); return next; });
+    setRows(rows.filter((_, i) => !selectedRows.has(i)));
+    setSelectedRows(new Set());
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      if (pendingDeleteIds.size > 0) {
+        await bulkDeleteKeywordRows(Array.from(pendingDeleteIds));
+      }
+      await Promise.all(Array.from(pendingUpdates.entries()).map(([id, updates]) => updateKeywordRow(id, updates)));
+      setPendingUpdates(new Map());
+      setPendingDeleteIds(new Set());
+      onUpdateKeywords(rows);
+    } catch (err) {
+      setSaveError(err.message || 'Failed to save changes.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBackClick = () => {
+    if (hasPendingChanges && !window.confirm('You have unsaved changes. Discard them?')) return;
+    onBack();
+  };
+
+  return (
+    <div>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={handleBackClick} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px 0', fontFamily: 'var(--font-body)', fontSize: 13 }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
+          <ArrowLeft size={16} /> Back
+        </button>
+        <div style={{ height: 20, width: 1, background: 'var(--border)' }} />
+        <div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{project.name}</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{project.domain}</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        {saveError && (
+          <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{saveError}</span>
+        )}
+        <button
+          onClick={handleSave}
+          disabled={!hasPendingChanges || saving}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: hasPendingChanges ? '#0f1523' : 'var(--surface-2)',
+            color: hasPendingChanges ? '#fff' : 'var(--text-muted)',
+            border: 'none', borderRadius: 8,
+            padding: '7px 16px', fontSize: 13, fontWeight: 600,
+            cursor: hasPendingChanges && !saving ? 'pointer' : 'default',
+            fontFamily: 'var(--font-body)', opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {saving ? 'Saving…' : hasPendingChanges ? 'Save changes' : 'Saved'}
+        </button>
+        <ActionsDropdown
+          selectedCount={selectedRows.size}
+          onBulkEdit={() => setShowBulkEdit(true)}
+          onBulkDelete={() => setShowBulkDelete(true)}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {filteredIndices.length} keyword{filteredIndices.length !== 1 ? 's' : ''}
+          {search ? ` of ${rows.length}` : ''}
+        </span>
+      </div>
+
+      {project.categorizationStatus === 'running' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', background: 'var(--accent-light)', borderBottom: '1px solid var(--border)', fontSize: 13, color: 'var(--accent)' }}>
+          <span>
+            Categorizing keywords…
+            {project.categorizationProgress ? ` ${project.categorizationProgress.processed}/${project.categorizationProgress.total} processed` : ''}
+          </span>
+          <button onClick={handleRefreshClick} disabled={refreshing} style={{ border: 'none', background: 'none', color: 'var(--accent)', fontWeight: 600, cursor: refreshing ? 'default' : 'pointer', fontFamily: 'var(--font-body)', fontSize: 12.5, padding: 0 }}>
+            {refreshing ? 'Checking…' : 'Refresh now'}
+          </button>
+        </div>
+      )}
+      {project.categorizationStatus === 'failed' && (
+        <div style={{ padding: '10px 20px', background: '#fef2f2', borderBottom: '1px solid var(--border)', fontSize: 13, color: 'var(--red, #dc2626)' }}>
+          Categorization job failed. Try importing the keywords again.
+        </div>
+      )}
+
+      <BulkEditModal open={showBulkEdit} onClose={() => setShowBulkEdit(false)} count={selectedRows.size} onApply={handleBulkEditApply} fields={KW_BULK_FIELDS} />
+      <BulkDeleteModal open={showBulkDelete} onClose={() => setShowBulkDelete(false)} count={selectedRows.size} onConfirm={handleBulkDelete} />
+
+      <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1500 }}>
+        <thead>
+          <tr style={{ background: '#f8f9fb', borderBottom: '1px solid var(--border)' }}>
+            <th style={{ padding: '10px 12px 10px 16px', width: 36 }}>
+              <div
+                onClick={toggleAll}
+                style={{
+                  width: 18, height: 18, borderRadius: 4,
+                  border: allSelected || someSelected ? '2px solid var(--accent)' : '2px solid #d1d5db',
+                  background: allSelected ? 'var(--accent)' : someSelected ? 'var(--accent)' : '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+                }}
+              >
+                {allSelected && <Check size={11} color="#fff" strokeWidth={3} />}
+                {someSelected && <span style={{ width: 8, height: 2, background: '#fff', borderRadius: 1, display: 'block' }} />}
+              </div>
+            </th>
+            {['KW', 'SV', 'KW Diff', 'Cluster', 'Category'].map((h, i) => (
+              <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h}</th>
+            ))}
+            <th style={{ padding: '6px 16px', textAlign: 'left' }}>
+              <HeaderQuickSelect placeholder="Type" options={['Organic', 'Local', 'SERP']} onSet={v => bulkUpdate('type', v)} />
+            </th>
+            <th style={{ padding: '6px 16px', textAlign: 'left' }}>
+              <HeaderQuickSelect placeholder="Target Type" options={['Blogs', 'Landing Page', 'Topical Blogs']} onSet={v => bulkUpdate('targetType', v)} />
+            </th>
+            <th style={{ padding: '6px 16px', textAlign: 'left' }}>
+              <HeaderQuickSelect placeholder="Target Subtype" options={['Informational', 'Commercial']} onSet={v => bulkUpdate('targetSubtype', v)} />
+            </th>
+            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Target Geo</th>
+            <th style={{ padding: '6px 16px', textAlign: 'left' }}>
+              <HeaderQuickSelect placeholder="Priority" options={['P1', 'P2', 'P3', 'P4', 'P5']} onSet={v => bulkUpdate('priority', v)} />
+            </th>
+            <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Landing Page</th>
+            <th style={{ padding: '10px 16px' }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {loading ? (
+            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading keywords…</td></tr>
+          ) : error ? (
+            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--red, #dc2626)', fontSize: 13 }}>{error}</td></tr>
+          ) : rows.length === 0 ? (
+            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords added yet. Use Add Keywords to import.</td></tr>
+          ) : pagedIndices.length === 0 ? (
+            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords match "{search}".</td></tr>
+          ) : pagedIndices.map(i => {
+            const r = rows[i];
+            return (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fafbfc'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <td style={{ padding: '10px 12px 10px 16px', width: 36 }}>
+                <div
+                  onClick={() => toggleRow(i)}
+                  style={{
+                    width: 18, height: 18, borderRadius: 4,
+                    border: selectedRows.has(i) ? '2px solid var(--accent)' : '2px solid #d1d5db',
+                    background: selectedRows.has(i) ? 'var(--accent)' : '#fff',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', transition: 'all 0.15s', flexShrink: 0,
+                  }}
+                >
+                  {selectedRows.has(i) && <Check size={11} color="#fff" strokeWidth={3} />}
+                </div>
+              </td>
+              <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', maxWidth: 220 }}>{r.kw}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.sv ?? '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.kwDiff ?? '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.cluster || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.category || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.type ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.type || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.targetType ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.targetType || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.targetSubtype ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.targetSubtype || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.targetGeo || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: r.priority ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.priority || '—'}</td>
+              <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--accent)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.landingPage || '—'}</td>
+              <td style={{ padding: '10px 16px' }}>
+                <button onClick={() => deleteRow(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, borderRadius: 6 }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = 'var(--red)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}>
+                  <Trash2 size={14} />
+                </button>
+              </td>
+            </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      </div>
+
+      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={safePage <= 1}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, border: '1px solid var(--border)', borderRadius: 4, background: '#fff', cursor: safePage <= 1 ? 'default' : 'pointer', opacity: safePage <= 1 ? 0.5 : 1 }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          Page:
+          <input
+            value={safePage}
+            onChange={e => {
+              const n = parseInt(e.target.value, 10);
+              if (!Number.isNaN(n)) setPage(Math.min(Math.max(1, n), pageCount));
+            }}
+            style={{ width: 36, border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', textAlign: 'center', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none' }}
+          />
+          of {pageCount}
+          <button
+            onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+            disabled={safePage >= pageCount}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, border: '1px solid var(--border)', borderRadius: 4, background: '#fff', cursor: safePage >= pageCount ? 'default' : 'pointer', opacity: safePage >= pageCount ? 0.5 : 1 }}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+          {KW_PAGE_SIZE} per page
+        </div>
       </div>
     </div>
   );
@@ -1423,40 +2193,63 @@ function CompetitorsTab({ onSelectCompetitor }) {
 
 export default function ProjectSetupPage({ tab }) {
   const [activeTab, setActiveTab] = useState(tab || 'Domain');
-  useEffect(() => { if (tab) { setActiveTab(tab); setSelectedPageProject(null); setSelectedCompetitor(null); } }, [tab]);
+  useEffect(() => { if (tab) { setActiveTab(tab); setSelectedPageProject(null); setSelectedCompetitor(null); setSelectedKwProject(null); setSearch(''); } }, [tab]);
   const [filter, setFilter] = useState(null);
   const [search, setSearch] = useState('');
-  const [projects, setProjects] = useState(INITIAL_PROJECTS);
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projectsError, setProjectsError] = useState('');
   const [pages, setPages] = useState(INITIAL_PAGES);
+  const [kwClusters, setKwClusters] = useState([]);
+  const [kwClustersLoading, setKwClustersLoading] = useState(true);
+  const [kwClustersError, setKwClustersError] = useState('');
   const [selectedPageProject, setSelectedPageProject] = useState(null);
   const [selectedCompetitor, setSelectedCompetitor] = useState(null);
+  const [selectedKwProject, setSelectedKwProject] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showAddPages, setShowAddPages] = useState(false);
+  const [showAddKeywords, setShowAddKeywords] = useState(false);
   const [showAddCompetitors, setShowAddCompetitors] = useState(false);
 
-  const handleCreateProject = (data) => {
+  useEffect(() => {
+    let cancelled = false;
+    setProjectsLoading(true);
+    fetchDomainRows()
+      .then(rows => { if (!cancelled) { setProjects(rows); setProjectsError(''); } })
+      .catch(err => { if (!cancelled) setProjectsError(err.message || 'Failed to load projects.'); })
+      .finally(() => { if (!cancelled) setProjectsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setKwClustersLoading(true);
+    fetchKwProjects()
+      .then(rows => { if (!cancelled) { setKwClusters(rows); setKwClustersError(''); } })
+      .catch(err => { if (!cancelled) setKwClustersError(err.message || 'Failed to load projects.'); })
+      .finally(() => { if (!cancelled) setKwClustersLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (selectedKwProject === null) return;
+    const slug = kwClusters[selectedKwProject]?.slug;
+    if (!slug) return;
+    let cancelled = false;
+    fetchKeywordRows(slug)
+      .then(rows => { if (!cancelled) setKwClusters(prev => prev.map((p, i) => i === selectedKwProject ? { ...p, detailKeywords: rows, detailKeywordsError: '' } : p)); })
+      .catch(err => { if (!cancelled) setKwClusters(prev => prev.map((p, i) => i === selectedKwProject ? { ...p, detailKeywordsError: err.message || 'Failed to load keywords.' } : p)); });
+    return () => { cancelled = true; };
+  }, [selectedKwProject]);
+
+  const handleCreateProject = async (data) => {
     const location = data.regions[0] || 'Global';
     const locationIcon = data.platforms.includes('google') ? 'google'
       : data.platforms.includes('ai_mode') || data.platforms.includes('ai_overview') ? 'ai'
       : 'desktop';
 
-    setProjects(prev => [...prev, {
-      name: data.name,
-      domain: data.domain,
-      device: locationIcon,
-      location,
-      locationIcon,
-      traffic: '0%',
-      trafficDir: null,
-      da: data.da,
-      keywords: 0,
-      keywordsDir: null,
-      targetPages: 0,
-      targetDir: null,
-      blogPages: 0,
-      updated: 'Just now',
-      targetPlatforms: ALL_PLATFORMS,
-    }]);
+    const created = await createProject(data);
+    setProjects(prev => [created, ...prev]);
 
     setPages(prev => [...prev, {
       name: data.name,
@@ -1464,7 +2257,7 @@ export default function ProjectSetupPage({ tab }) {
       locationIcon,
       location,
       totalPages: 0,
-      commercialPct: '0%',
+      commercialPct: '0/0',
       blogPages: 0,
       blogDir: null,
       keywords: 0,
@@ -1473,31 +2266,231 @@ export default function ProjectSetupPage({ tab }) {
     }]);
   };
 
-  const handleImportPages = (data) => {
-    const pageCount = data.pages.length || 1;
-    const matchedProject = projects.find(p => p.domain === data.project);
-    const location = matchedProject?.location || 'Global';
-    const locationIcon = matchedProject?.locationIcon || 'desktop';
+  const handleUpdateProject = async (project, updates) => {
+    const updated = await updateDomainRow(project.id, updates);
+    setProjects(prev => prev.map(p => p === project ? updated : p));
+  };
 
-    setPages(prev => [...prev, {
-      name: data.name,
-      domain: data.domain,
-      locationIcon,
-      location,
-      totalPages: pageCount,
-      commercialPct: '0%',
-      blogPages: 0,
-      blogDir: 'up',
-      keywords: 0,
-      keywordsDir: null,
-      updated: 'Just now',
-    }]);
+  const handleDeleteProject = async (project) => {
+    await deleteDomainRow(project.id);
+    setProjects(prev => prev.filter(p => p !== project));
+  };
+
+  const handleImportPages = (data) => {
+    const newRows = data.pages.map(r => ({
+      pageName: r.pageName,
+      url: r.url,
+      cluster: r.cluster,
+      category: r.category,
+      targetCategory: '',
+      targetType: '',
+    }));
+
+    setPages(prev => {
+      const targetIdx = typeof data.targetIndex === 'number' ? data.targetIndex : prev.findIndex(p => p.domain === data.domain);
+
+      if (targetIdx !== -1) {
+        return prev.map((p, i) => {
+          if (i !== targetIdx) return p;
+          const detailPages = [...(p.detailPages || []), ...newRows];
+          const commercialPages = detailPages.filter(r => (r.targetType || '').toLowerCase().includes('commercial')).length;
+          return {
+            ...p,
+            detailPages,
+            totalPages: detailPages.length,
+            commercialPct: `${commercialPages}/${detailPages.length}`,
+            updated: 'Just now',
+          };
+        });
+      }
+
+      const matchedProject = projects.find(p => p.domain === data.domain);
+      return [...prev, {
+        name: data.name,
+        domain: data.domain,
+        locationIcon: matchedProject?.locationIcon || 'desktop',
+        location: matchedProject?.location || 'Global',
+        totalPages: newRows.length,
+        commercialPct: `0/${newRows.length}`,
+        blogPages: 0,
+        blogDir: 'up',
+        keywords: 0,
+        keywordsDir: null,
+        updated: 'Just now',
+        detailPages: newRows,
+      }];
+    });
+  };
+
+  const updateKwProjectByDomain = (domain, updater) => {
+    setKwClusters(prev => {
+      const idx = prev.findIndex(p => p.domain === domain);
+      if (idx === -1) return prev;
+      return prev.map((p, i) => i === idx ? updater(p) : p);
+    });
+  };
+
+  const addPendingCategoryJob = (jobId, domain) => {
+    const existing = loadPendingCategoryJobs();
+    if (existing.some(j => j.jobId === jobId)) return;
+    savePendingCategoryJobs([...existing, { jobId, domain }]);
+  };
+
+  const removePendingCategoryJob = (jobId) => {
+    savePendingCategoryJobs(loadPendingCategoryJobs().filter(j => j.jobId !== jobId));
+  };
+
+  const applyClusterResults = (domain, resultsByKw, categoryToCluster) => {
+    updateKwProjectByDomain(domain, p => {
+      const detailKeywords = (p.detailKeywords || []).map(row => {
+        const match = resultsByKw.get(String(row.kw).trim().toLowerCase());
+        if (!match) return row;
+        const category = match.category || row.category;
+        const cluster = categoryToCluster.get(category) || row.cluster;
+        return { ...row, category, cluster };
+      });
+      return { ...p, detailKeywords, categorizationStatus: 'completed', categorizationJobId: null, categorizationProgress: null };
+    });
+  };
+
+  // Checks a categorization job once: updates progress, and applies results if the job
+  // has finished. Returns 'completed' | 'failed' | 'pending' so pollCategoryJob knows
+  // whether to keep retrying.
+  const checkCategoryJob = async (jobId, domain) => {
+    let job;
+    try {
+      const res = await fetch(`${CATEGORY_API_BASE}/jobs/${jobId}`);
+      if (res.ok) job = await res.json();
+    } catch {
+      return 'pending';
+    }
+    if (!job) return 'pending';
+
+    updateKwProjectByDomain(domain, p => (
+      p.categorizationJobId === jobId
+        ? { ...p, categorizationProgress: { processed: job.processed, total: job.total } }
+        : p
+    ));
+
+    if (job.status === 'completed') {
+      try {
+        const [resultsRes, clustersRes] = await Promise.all([
+          fetch(`${CATEGORY_API_BASE}/jobs/${jobId}/results`),
+          fetch(`${CATEGORY_API_BASE}/clusters`),
+        ]);
+        const resultsData = await resultsRes.json();
+        const clustersData = await clustersRes.json();
+
+        const categoryToCluster = new Map();
+        (clustersData.clusters || []).forEach(c => {
+          (c.categories || []).forEach(cat => categoryToCluster.set(cat, c.cluster));
+        });
+
+        const resultsByKw = new Map();
+        (resultsData.results || []).forEach(r => resultsByKw.set(String(r.keyword).trim().toLowerCase(), r));
+
+        applyClusterResults(domain, resultsByKw, categoryToCluster);
+      } catch (err) {
+        console.error('Failed to load categorization results', err);
+      }
+      removePendingCategoryJob(jobId);
+      return 'completed';
+    }
+
+    if (job.status === 'failed' || job.error) {
+      updateKwProjectByDomain(domain, p => p.categorizationJobId === jobId ? { ...p, categorizationStatus: 'failed' } : p);
+      removePendingCategoryJob(jobId);
+      return 'failed';
+    }
+
+    return 'pending';
+  };
+
+  const pollCategoryJob = (jobId, domain) => {
+    const POLL_INTERVAL_MS = 10000;
+    const MAX_ATTEMPTS = 180; // ~30 minutes
+
+    addPendingCategoryJob(jobId, domain);
+    updateKwProjectByDomain(domain, p => ({ ...p, categorizationStatus: 'running', categorizationJobId: jobId }));
+
+    const tick = async (attempt) => {
+      if (attempt >= MAX_ATTEMPTS) return;
+      const status = await checkCategoryJob(jobId, domain);
+      if (status !== 'pending') return;
+      setTimeout(() => tick(attempt + 1), POLL_INTERVAL_MS);
+    };
+
+    tick(0);
+  };
+
+  // Resume polling for any categorization jobs still in flight from a previous session
+  // (e.g. the page was refreshed while a job was running).
+  useEffect(() => {
+    loadPendingCategoryJobs().forEach(({ jobId, domain }) => pollCategoryJob(jobId, domain));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleImportKeywords = (data) => {
+    const newRows = data.keywords.map(r => ({
+      kw: r.kw,
+      sv: r.sv,
+      kwDiff: r.kwDiff,
+      type: r.type,
+      cluster: r.cluster,
+      category: r.category,
+      targetType: r.targetType,
+      targetSubtype: r.targetSubtype,
+      targetGeo: r.targetGeo,
+      priority: r.priority,
+      landingPage: r.landingPage,
+    }));
+
+    setKwClusters(prev => {
+      const targetIdx = typeof data.targetIndex === 'number' ? data.targetIndex : prev.findIndex(p => p.domain === data.domain);
+
+      if (targetIdx !== -1) {
+        return prev.map((p, i) => {
+          if (i !== targetIdx) return p;
+          const detailKeywords = [...(p.detailKeywords || []), ...newRows];
+          const commercialKeywords = detailKeywords.filter(r => r.targetSubtype === 'Commercial').length;
+          return {
+            ...p,
+            detailKeywords,
+            totalPages: detailKeywords.length,
+            keywords: detailKeywords.length,
+            commercialPct: `${commercialKeywords}/${detailKeywords.length}`,
+            updated: 'Just now',
+          };
+        });
+      }
+
+      const matchedProject = projects.find(p => p.domain === data.domain);
+      return [...prev, {
+        name: data.name,
+        domain: data.domain,
+        locationIcon: matchedProject?.locationIcon || 'desktop',
+        location: matchedProject?.location || 'Global',
+        totalPages: newRows.length,
+        commercialPct: `0/${newRows.length}`,
+        blogPages: 0,
+        blogDir: 'up',
+        keywords: newRows.length,
+        keywordsDir: null,
+        updated: 'Just now',
+        detailKeywords: newRows,
+      }];
+    });
+
+    if (data.jobId) {
+      pollCategoryJob(data.jobId, data.domain);
+    }
   };
 
   const filterTabs = ['AI Mode', 'AI Overview', 'Google', 'ChatGPT', 'Gemini'];
 
   const ctaByTab = {
     Domain: { label: 'Create project', onClick: () => setShowCreate(true) },
+    'KW Cluster': { label: 'Add Keywords', onClick: () => setShowAddKeywords(true) },
     Pages: { label: 'Add Pages', onClick: () => setShowAddPages(true) },
     Competitors: { label: 'Add Competitors', onClick: () => setShowAddCompetitors(true) },
     Outreach: { label: 'Add Outreach', onClick: () => {} },
@@ -1523,7 +2516,7 @@ export default function ProjectSetupPage({ tab }) {
         {TABS.map(t => (
           <button
             key={t}
-            onClick={() => { setActiveTab(t); setSelectedPageProject(null); setSelectedCompetitor(null); }}
+            onClick={() => { setActiveTab(t); setSelectedPageProject(null); setSelectedCompetitor(null); setSelectedKwProject(null); setSearch(''); }}
             style={{
               padding: '10px 20px',
               fontSize: 14,
@@ -1556,7 +2549,11 @@ export default function ProjectSetupPage({ tab }) {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder={activeTab === 'Pages' && selectedPageProject !== null ? 'Page name or url' : 'Project name or domain'}
+              placeholder={
+                activeTab === 'Pages' && selectedPageProject !== null ? 'Page name or url'
+                : activeTab === 'KW Cluster' && selectedKwProject !== null ? 'Search keywords'
+                : 'Project name or domain'
+              }
               style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 13, fontFamily: 'var(--font-body)', color: 'var(--text-primary)', width: '100%' }}
             />
           </div>
@@ -1630,7 +2627,19 @@ export default function ProjectSetupPage({ tab }) {
 
         {/* Table */}
         <div style={{ overflowX: 'auto' }}>
-          {activeTab === 'Domain' && <DomainTab projects={projects} filter={filter} />}
+          {activeTab === 'Domain' && <DomainTab projects={projects} filter={filter} onUpdateProject={handleUpdateProject} onDeleteProject={handleDeleteProject} loading={projectsLoading} error={projectsError} />}
+          {activeTab === 'KW Cluster' && selectedKwProject !== null ? (
+            <KwClusterDetailView
+              project={kwClusters[selectedKwProject]}
+              search={search}
+              onBack={() => { setSelectedKwProject(null); setSearch(''); }}
+              onUpdateKeywords={(updated) => setKwClusters(prev => prev.map((p, i) => i === selectedKwProject ? { ...p, detailKeywords: updated } : p))}
+              onRefreshCategorization={() => {
+                const proj = kwClusters[selectedKwProject];
+                return proj?.categorizationJobId ? checkCategoryJob(proj.categorizationJobId, proj.domain) : undefined;
+              }}
+            />
+          ) : activeTab === 'KW Cluster' && <PagesTab pages={kwClusters} onSelectProject={(i) => { setSelectedKwProject(i); setSearch(''); }} loading={kwClustersLoading} error={kwClustersError} />}
           {activeTab === 'Pages' && selectedPageProject !== null ? (
             <PageDetailView
               project={pages[selectedPageProject]}
@@ -1651,16 +2660,18 @@ export default function ProjectSetupPage({ tab }) {
           )}
         </div>
 
-        {/* Pagination */}
-        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
-            Page:
-            <input defaultValue="1" style={{ width: 36, border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', textAlign: 'center', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none' }} />
-            of 1
+        {/* Pagination — the KW Cluster detail view renders its own paginated footer */}
+        {!(activeTab === 'KW Cluster' && selectedKwProject !== null) && (
+          <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-muted)' }}>
+              Page:
+              <input defaultValue="1" style={{ width: 36, border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', textAlign: 'center', fontSize: 13, fontFamily: 'var(--font-body)', outline: 'none' }} />
+              of 1
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+            </div>
           </div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-          </div>
-        </div>
+        )}
 
       </div>
 
@@ -1673,7 +2684,20 @@ export default function ProjectSetupPage({ tab }) {
 
       {/* Modals */}
       <CreateProjectModal open={showCreate} onClose={() => setShowCreate(false)} onCreateProject={handleCreateProject} />
-      <AddPagesModal open={showAddPages} onClose={() => setShowAddPages(false)} projects={projects} onImportPages={handleImportPages} />
+      <AddPagesModal
+        open={showAddPages}
+        onClose={() => setShowAddPages(false)}
+        projects={projects}
+        onImportPages={handleImportPages}
+        lockedProject={activeTab === 'Pages' && selectedPageProject !== null ? { index: selectedPageProject, name: pages[selectedPageProject].name, domain: pages[selectedPageProject].domain } : null}
+      />
+      <AddKeywordsModal
+        open={showAddKeywords}
+        onClose={() => setShowAddKeywords(false)}
+        projects={projects}
+        onImportKeywords={handleImportKeywords}
+        lockedProject={activeTab === 'KW Cluster' && selectedKwProject !== null ? { index: selectedKwProject, name: kwClusters[selectedKwProject].name, domain: kwClusters[selectedKwProject].domain } : null}
+      />
       <AddCompetitorsModal open={showAddCompetitors} onClose={() => setShowAddCompetitors(false)} />
     </div>
   );
