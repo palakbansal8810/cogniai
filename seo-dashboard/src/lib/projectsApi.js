@@ -336,6 +336,35 @@ function kwRowToUi(row) {
   };
 }
 
+export async function insertKeywordRows(projectSlug, rows) {
+  const dbRows = rows.map(r => ({
+    project_name: projectSlug,
+    keyword: r.kw,
+    sv: r.sv === '' ? null : r.sv,
+    kw_diff: r.kwDiff === '' ? null : r.kwDiff,
+    cluster: r.cluster || null,
+    category: r.category || null,
+    type: r.type || null,
+    target_type: r.targetType || null,
+    target_subtype: r.targetSubtype || null,
+    target_geo: r.targetGeo || null,
+    priority: r.priority || null,
+    landing_page_url: r.landingPage || null,
+  }));
+
+  if (isLocalMode) {
+    const kwRows = JSON.parse(localStorage.getItem('seo_keyword_categories') || '[]');
+    const maxId = kwRows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0);
+    const inserted = dbRows.map((r, i) => ({ id: maxId + i + 1, ...r }));
+    localStorage.setItem('seo_keyword_categories', JSON.stringify([...kwRows, ...inserted]));
+    return inserted.map(kwRowToUi);
+  }
+
+  const { data, error } = await supabase.from('keyword_categories').insert(dbRows).select();
+  if (error) throw error;
+  return (data || []).map(kwRowToUi);
+}
+
 export async function fetchKeywordRows(projectSlug) {
   if (isLocalMode) {
     const kwRows = JSON.parse(localStorage.getItem('seo_keyword_categories') || '[]');

@@ -45,18 +45,6 @@ export const NAV_STRUCTURE = [
           { id: 'competitors', label: 'Competitors', path: 'search-visibility/competitors' },
         ],
       },
-      {
-        label: 'Configurations',
-        type: 'section',
-        items: [
-          { id: 'keyword-research', label: 'Keyword Research', path: 'search-visibility/keyword-research' },
-          { id: 'keywords-clustering', label: 'Keywords Clustering', path: 'search-visibility/keywords-clustering' },
-          { id: 'page-mapping', label: 'Page Mapping', path: 'search-visibility/page-mapping' },
-          { id: 'outreach', label: 'Outreach', path: 'search-visibility/outreach' },
-          { id: 'domain-setup', label: 'Domain Setup', path: 'search-visibility/domain-setup' },
-          { id: 'competitor-setup', label: 'Competitor Setup', path: 'search-visibility/competitor-setup' },
-        ],
-      },
       // Search sub-module (col C)
       {
         label: 'Search',
