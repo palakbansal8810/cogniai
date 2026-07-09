@@ -149,7 +149,7 @@ function CountryTagInput({ label, tags, onAdd, onRemove, placeholder }) {
           background: '#fff', border: '1.5px solid var(--border)', borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)', maxHeight: 200, overflowY: 'auto',
         }}>
-          {filtered.slice(0, 50).map((c, i) => (
+          {filtered.map((c, i) => (
             <div
               key={c}
               onMouseDown={(e) => { e.preventDefault(); select(c); }}
@@ -556,7 +556,9 @@ function AddPagesModal({ open, onClose, projects, onImportPages, lockedProject }
 
 // ─── Add Keywords Modal ──────────────────────────────────────────────────────
 
-const CATEGORY_API_BASE = 'https://seo-backend-fqlp.onrender.com';
+// Local dev: pointed at the backend running on localhost:8000 for testing.
+// Swap back to 'https://seo-backend-fqlp.onrender.com' before deploying.
+const CATEGORY_API_BASE = 'http://localhost:8000';
 const CATEGORY_JOB_API = `${CATEGORY_API_BASE}/jobs/category`;
 const CATEGORY_JOBS_STORAGE_KEY = 'seo-dashboard:pending-category-jobs';
 
@@ -583,7 +585,7 @@ function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedPro
   const [fileName, setFileName] = useState('');
   const [rawFile, setRawFile] = useState(null);
   const [clustered, setClustered] = useState(false);
-  const [country, setCountry] = useState('');
+  const [countries, setCountries] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState('');
 
@@ -643,15 +645,17 @@ function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedPro
 
   const resetForm = () => {
     setProject(''); setShare(false); setCsvRows([]); setFileName('');
-    setRawFile(null); setClustered(false); setCountry(''); setApiError('');
+    setRawFile(null); setClustered(false); setCountries([]); setApiError('');
   };
 
   const runCategoryJob = async () => {
     const projectName = lockedProject ? lockedProject.name : (projects.find(p => p.domain === project)?.name || project);
     const formData = new FormData();
     formData.append('file', rawFile);
-    formData.append('country', country);
     formData.append('project', projectName);
+    // Backend only supports one SERP region per job -- use the first
+    // selected target country (matches whatever countries[0] resolves to).
+    formData.append('country', countries[0]);
     const res = await fetch(CATEGORY_JOB_API, { method: 'POST', body: formData });
     if (!res.ok) {
       const body = await res.json().catch(() => null);
@@ -669,7 +673,7 @@ function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedPro
         keywords: csvRows,
         share,
         jobId,
-        country: jobId ? country : undefined,
+        countries,
       });
     } else {
       const matchedProject = projects.find(p => p.domain === project);
@@ -679,7 +683,7 @@ function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedPro
         keywords: csvRows,
         share,
         jobId,
-        country: jobId ? country : undefined,
+        countries,
       });
     }
     resetForm();
@@ -692,69 +696,61 @@ function AddKeywordsModal({ open, onClose, projects, onImportKeywords, lockedPro
     } else if (!project && csvRows.length === 0) {
       return;
     }
+    if (!rawFile || countries.length === 0) return;
 
+    setApiError('');
+    setSubmitting(true);
     let jobId;
-    if (!clustered) {
-      if (!rawFile || !country) return;
-      setApiError('');
-      setSubmitting(true);
-      try {
-        const job = await runCategoryJob();
-        jobId = job.job_id;
-      } catch (err) {
-        setSubmitting(false);
-        setApiError(err.message || 'Failed to start categorization job.');
-        return;
-      }
+    try {
+      const job = await runCategoryJob();
+      jobId = job.job_id;
+    } catch (err) {
       setSubmitting(false);
+      setApiError(err.message || 'Failed to start categorization job.');
+      return;
     }
+    setSubmitting(false);
 
     finishImport(jobId);
   };
 
-  const canImport = (lockedProject ? csvRows.length > 0 : true) && (clustered || (!!rawFile && !!country)) && !submitting;
+  const canImport = (lockedProject || project) && csvRows.length > 0 && countries.length > 0 && !submitting;
 
   return (
     <Modal open={open} onClose={onClose} title="Add Keywords"
       footer={<><Btn variant="primary" onClick={handleImport} style={canImport ? {} : { opacity: 0.5, pointerEvents: 'none' }}>{submitting ? 'Starting categorization…' : 'Import Keywords'}</Btn><Btn variant="outline" onClick={onClose} style={{ flex: 'none', padding: '10px 28px' }}>Cancel</Btn></>}
     >
       {lockedProject ? (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
           Adding keywords to <strong style={{ color: 'var(--text-primary)' }}>{lockedProject.name}</strong>
         </div>
       ) : (
-        <Select
-          label="Choose Project"
-          placeholder="Select a project"
-          value={project}
-          onChange={setProject}
-          options={projectOptions}
+        <div style={{ marginBottom: 12 }}>
+          <Select
+            label="Choose Project"
+            placeholder="Select a project"
+            value={project}
+            onChange={setProject}
+            options={projectOptions}
+          />
+        </div>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <CountryTagInput
+          label="Select Target Countries"
+          tags={countries}
+          onAdd={c => setCountries(prev => prev.includes(c) ? prev : [...prev, c])}
+          onRemove={c => setCountries(prev => prev.filter(v => v !== c))}
+          placeholder="Type to search and select countries..."
         />
-      )}
-
-      <Checkbox label="Is this project's keywords already clustered?" checked={clustered} onChange={setClustered} />
-
-      {!clustered && (
-        <Select
-          label="Country"
-          placeholder="Select a country"
-          value={country}
-          onChange={setCountry}
-          options={COUNTRIES}
-        />
-      )}
-
-      {!clustered && !rawFile && (
-        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-          Not clustered yet — after import we'll send the uploaded file and country to the categorization service to cluster these keywords.
-        </span>
-      )}
+      </div>
 
       {apiError && (
-        <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{apiError}</span>
+        <span style={{ fontSize: 12, color: 'var(--red, #dc2626)', display: 'block', marginBottom: 12 }}>{apiError}</span>
       )}
 
-      <div style={{ height: 1, background: 'var(--border)' }} />
+      <div style={{ height: 1, background: 'var(--border)', margin: '12px 0' }} />
 
       {/* Import Keywords section */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1599,7 +1595,7 @@ function PageDetailView({ project, onBack, onUpdatePages }) {
 
 const KW_PAGE_SIZE = 100;
 
-function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCategorization, search }) {
+function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCategorization, search, onAddKeywords }) {
   const [rows, setRows] = useState(project.detailKeywords || []);
   const loading = project.detailKeywords === undefined;
   const error = project.detailKeywordsError || '';
@@ -1613,6 +1609,241 @@ function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCateg
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const hasPendingChanges = pendingUpdates.size > 0 || pendingDeleteIds.size > 0;
+
+  const [showExcludeDropdown, setShowExcludeDropdown] = useState(false);
+  const [excludeConfig, setExcludeConfig] = useState({
+    kwChecked: false, kwVals: [],
+    svChecked: false, svMin: '', svMax: '',
+    kwDiffChecked: false, kwDiffMin: '', kwDiffMax: '',
+    rankChecked: false, rankMin: '', rankMax: '',
+    typeChecked: false, typeVals: [],
+    targetTypeChecked: false, targetTypeVals: [],
+    targetSubtypeChecked: false, targetSubtypeVals: [],
+    targetGeoChecked: false, targetGeoVals: [],
+    priorityChecked: false, priorityVals: []
+  });
+
+  const [tempKwInput, setTempKwInput] = useState('');
+  const [tempGeoInput, setTempGeoInput] = useState('');
+
+  const [showRankColumn, setShowRankColumn] = useState(false);
+  const [rankChecking, setRankChecking] = useState(false);
+  const [rankCheckError, setRankCheckError] = useState('');
+
+  const addKwTag = () => {
+    if (!tempKwInput.trim()) return;
+    if (!excludeConfig.kwVals.includes(tempKwInput.trim())) {
+      setExcludeConfig(prev => ({
+        ...prev,
+        kwVals: [...prev.kwVals, tempKwInput.trim()]
+      }));
+    }
+    setTempKwInput('');
+  };
+
+  const removeKwTag = (val) => {
+    setExcludeConfig(prev => ({
+      ...prev,
+      kwVals: prev.kwVals.filter(v => v !== val)
+    }));
+  };
+
+  const addGeoTag = () => {
+    if (!tempGeoInput.trim()) return;
+    if (!excludeConfig.targetGeoVals.includes(tempGeoInput.trim())) {
+      setExcludeConfig(prev => ({
+        ...prev,
+        targetGeoVals: [...prev.targetGeoVals, tempGeoInput.trim()]
+      }));
+    }
+    setTempGeoInput('');
+  };
+
+  const removeGeoTag = (val) => {
+    setExcludeConfig(prev => ({
+      ...prev,
+      targetGeoVals: prev.targetGeoVals.filter(v => v !== val)
+    }));
+  };
+
+  const toggleCheckboxVal = (field, val) => {
+    setExcludeConfig(prev => {
+      const list = prev[field] || [];
+      const updated = list.includes(val)
+        ? list.filter(v => v !== val)
+        : [...list, val];
+      return { ...prev, [field]: updated };
+    });
+  };
+
+  const handleExcludeAction = () => {
+    const filteredRows = rows.filter(r => {
+      if (excludeConfig.kwChecked && excludeConfig.kwVals.length > 0) {
+        if (excludeConfig.kwVals.some(val => r.kw?.toLowerCase().includes(val.toLowerCase()))) {
+          return false;
+        }
+      }
+      if (excludeConfig.svChecked) {
+        const sv = Number(r.sv) || 0;
+        const min = excludeConfig.svMin !== '' ? Number(excludeConfig.svMin) : -Infinity;
+        const max = excludeConfig.svMax !== '' ? Number(excludeConfig.svMax) : Infinity;
+        if (sv >= min && sv <= max) return false;
+      }
+      if (excludeConfig.kwDiffChecked) {
+        const diff = Number(r.kwDiff) || 0;
+        const min = excludeConfig.kwDiffMin !== '' ? Number(excludeConfig.kwDiffMin) : -Infinity;
+        const max = excludeConfig.kwDiffMax !== '' ? Number(excludeConfig.kwDiffMax) : Infinity;
+        if (diff >= min && diff <= max) return false;
+      }
+      if (excludeConfig.rankChecked) {
+        const rank = Number(r.rank) || 0;
+        const min = excludeConfig.rankMin !== '' ? Number(excludeConfig.rankMin) : -Infinity;
+        const max = excludeConfig.rankMax !== '' ? Number(excludeConfig.rankMax) : Infinity;
+        if (r.rank !== undefined && r.rank !== null && rank >= min && rank <= max) return false;
+      }
+      if (excludeConfig.typeChecked && excludeConfig.typeVals.length > 0) {
+        if (excludeConfig.typeVals.includes(r.type)) return false;
+      }
+      if (excludeConfig.targetTypeChecked && excludeConfig.targetTypeVals.length > 0) {
+        if (excludeConfig.targetTypeVals.includes(r.targetType)) return false;
+      }
+      if (excludeConfig.targetSubtypeChecked && excludeConfig.targetSubtypeVals.length > 0) {
+        if (excludeConfig.targetSubtypeVals.includes(r.targetSubtype)) return false;
+      }
+      if (excludeConfig.targetGeoChecked && excludeConfig.targetGeoVals.length > 0) {
+        if (excludeConfig.targetGeoVals.some(val => r.targetGeo?.toLowerCase().includes(val.toLowerCase()))) {
+          return false;
+        }
+      }
+      if (excludeConfig.priorityChecked && excludeConfig.priorityVals.length > 0) {
+        if (excludeConfig.priorityVals.includes(r.priority)) return false;
+      }
+      return true;
+    });
+
+    const excludedIds = rows.filter(r => !filteredRows.includes(r)).map(r => r.id);
+    setPendingDeleteIds(prev => {
+      const next = new Set(prev);
+      excludedIds.forEach(id => next.add(id));
+      return next;
+    });
+    setRows(filteredRows);
+    setShowExcludeDropdown(false);
+  };
+
+  const handleLocalCluster = () => {
+    const updatedRows = rows.map(r => {
+      let cluster = r.cluster;
+      let category = r.category;
+      
+      const kwLower = r.kw?.toLowerCase() || '';
+      if (kwLower.includes('school') || kwLower.includes('international') || kwLower.includes('campuses')) {
+        cluster = 'International Schools';
+        category = 'Education';
+      } else if (kwLower.includes('fee') || kwLower.includes('cost') || kwLower.includes('price')) {
+        cluster = 'Admission & Fees';
+        category = 'Finance';
+      } else if (kwLower.includes('admission') || kwLower.includes('apply') || kwLower.includes('enroll')) {
+        cluster = 'Admissions Process';
+        category = 'Admissions';
+      } else if (kwLower.includes('owis') || kwLower.includes('one world')) {
+        cluster = 'OWIS Brand';
+        category = 'Brand';
+      } else {
+        const words = r.kw.split(' ').slice(0, 2).join(' ');
+        cluster = words.charAt(0).toUpperCase() + words.slice(1);
+        category = 'General';
+      }
+      return { ...r, cluster, category };
+    });
+
+    setRows(updatedRows);
+    
+    setPendingUpdates(prev => {
+      const next = new Map(prev);
+      updatedRows.forEach(r => {
+        next.set(r.id, {
+          ...(next.get(r.id) || {}),
+          cluster: r.cluster,
+          category: r.category
+        });
+      });
+      return next;
+    });
+  };
+
+  // Merges just the `rank` field from the DB into local rows, keyed by row id
+  // -- deliberately leaves everything else in `rows` (including any unsaved
+  // pendingUpdates edits) untouched.
+  const refreshRanksFromDb = async () => {
+    const freshRows = await fetchKeywordRows(project.slug);
+    const rankById = new Map(freshRows.map(r => [String(r.id), r.rank]));
+    setRows(prev => prev.map(r => rankById.has(String(r.id)) ? { ...r, rank: rankById.get(String(r.id)) } : r));
+    return freshRows;
+  };
+
+  // Rank-checking runs on the backend's separate 'rank_checks' queue, which
+  // is safe to (and does) run with multiple concurrent workers -- see
+  // rank_checker.py's module docstring. This just triggers that job and
+  // polls until every keyword in it has been checked.
+  const pollRankCheckJob = (jobId) => {
+    const POLL_INTERVAL_MS = 8000;
+    const MAX_ATTEMPTS = 90; // ~12 minutes
+
+    const tick = async (attempt) => {
+      try {
+        const res = await fetch(`${CATEGORY_API_BASE}/jobs/${jobId}/results`);
+        const data = await res.json();
+        const results = data.results || [];
+        await refreshRanksFromDb();
+
+        const allChecked = results.length > 0 && results.every(r => r.rank_checked_at);
+        if (allChecked || attempt >= MAX_ATTEMPTS) {
+          setRankChecking(false);
+          return;
+        }
+      } catch {
+        // transient network hiccup -- keep polling rather than aborting
+      }
+      setTimeout(() => tick(attempt + 1), POLL_INTERVAL_MS);
+    };
+
+    tick(0);
+  };
+
+  const handleCheckRanking = async () => {
+    if (rankChecking) return;
+    setRankCheckError('');
+    setRankChecking(true);
+    setShowRankColumn(true);
+    try {
+      if (!project.slug) {
+        throw new Error("This project is missing its backend project reference -- reload the page and try again.");
+      }
+
+      const jobsRes = await fetch(`${CATEGORY_API_BASE}/jobs`);
+      if (!jobsRes.ok) throw new Error('Failed to look up this project\'s keyword import jobs.');
+      const jobsData = await jobsRes.json();
+      const latestJob = (jobsData.jobs || [])
+        .filter(j => j.domain === project.slug && j.status === 'completed' && j.clustering_triggered_at)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+      if (!latestJob) {
+        throw new Error('No completed keyword import found for this project yet -- import keywords first.');
+      }
+
+      const res = await fetch(`${CATEGORY_API_BASE}/jobs/${latestJob.id}/check-rank`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail || 'Failed to start rank check.');
+      }
+
+      pollRankCheckJob(latestJob.id);
+    } catch (err) {
+      setRankChecking(false);
+      setRankCheckError(err.message || 'Failed to check ranking.');
+    }
+  };
 
   const filteredIndices = rows
     .map((_, i) => i)
@@ -1735,6 +1966,321 @@ function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCateg
         {saveError && (
           <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{saveError}</span>
         )}
+        {rankCheckError && (
+          <span style={{ fontSize: 12, color: 'var(--red, #dc2626)' }}>{rankCheckError}</span>
+        )}
+
+        {/* Check initial ranking button */}
+        <button
+          onClick={handleCheckRanking}
+          disabled={rankChecking}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8,
+            padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: rankChecking ? 'default' : 'pointer',
+            fontFamily: 'var(--font-body)', opacity: rankChecking ? 0.6 : 1,
+          }}
+        >
+          {rankChecking ? 'Checking ranking…' : 'Check initial ranking'}
+        </button>
+
+        {/* Exclude Dropdown */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowExcludeDropdown(!showExcludeDropdown)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8,
+              padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+            }}
+          >
+            Exclude ▾
+          </button>
+          
+          {showExcludeDropdown && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 320,
+              background: '#fff', border: '1px solid var(--border)', borderRadius: 8,
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              zIndex: 50, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
+              maxHeight: 480, overflowY: 'auto',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>
+                Exclude Keywords
+              </div>
+              
+              {/* KW Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.kwChecked} onChange={e => setExcludeConfig({...excludeConfig, kwChecked: e.target.checked})} />
+                  Keyword (KW)
+                </label>
+                {excludeConfig.kwChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="text"
+                        placeholder="Type segment & click Add..."
+                        value={tempKwInput}
+                        onChange={e => setTempKwInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addKwTag(); } }}
+                        style={{ border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12, flex: 1 }}
+                      />
+                      <button
+                        onClick={addKwTag}
+                        style={{ padding: '4px 10px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {excludeConfig.kwVals.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        {excludeConfig.kwVals.map(val => (
+                          <span key={val} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--accent-light)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 500 }}>
+                            {val}
+                            <span onClick={() => removeKwTag(val)} style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: 2 }}>×</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* SV Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.svChecked} onChange={e => setExcludeConfig({...excludeConfig, svChecked: e.target.checked})} />
+                  Search Volume (SV)
+                </label>
+                {excludeConfig.svChecked && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={excludeConfig.svMin}
+                      onChange={e => setExcludeConfig({...excludeConfig, svMin: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>to</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={excludeConfig.svMax}
+                      onChange={e => setExcludeConfig({...excludeConfig, svMax: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* KW Diff Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.kwDiffChecked} onChange={e => setExcludeConfig({...excludeConfig, kwDiffChecked: e.target.checked})} />
+                  KW Difficulty
+                </label>
+                {excludeConfig.kwDiffChecked && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={excludeConfig.kwDiffMin}
+                      onChange={e => setExcludeConfig({...excludeConfig, kwDiffMin: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>to</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={excludeConfig.kwDiffMax}
+                      onChange={e => setExcludeConfig({...excludeConfig, kwDiffMax: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Rank Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.rankChecked} onChange={e => setExcludeConfig({...excludeConfig, rankChecked: e.target.checked})} />
+                  Ranking Range
+                </label>
+                {excludeConfig.rankChecked && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      value={excludeConfig.rankMin}
+                      onChange={e => setExcludeConfig({...excludeConfig, rankMin: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>to</span>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      value={excludeConfig.rankMax}
+                      onChange={e => setExcludeConfig({...excludeConfig, rankMax: e.target.value})}
+                      style={{ width: '100%', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12 }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Type Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.typeChecked} onChange={e => setExcludeConfig({...excludeConfig, typeChecked: e.target.checked})} />
+                  Type
+                </label>
+                {excludeConfig.typeChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 20 }}>
+                    {['Organic', 'Local', 'SERP'].map(t => (
+                      <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={excludeConfig.typeVals.includes(t)} onChange={() => toggleCheckboxVal('typeVals', t)} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Target Type Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.targetTypeChecked} onChange={e => setExcludeConfig({...excludeConfig, targetTypeChecked: e.target.checked})} />
+                  Target Type
+                </label>
+                {excludeConfig.targetTypeChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 20 }}>
+                    {['Blogs', 'Landing Page', 'Topical Blogs'].map(t => (
+                      <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={excludeConfig.targetTypeVals.includes(t)} onChange={() => toggleCheckboxVal('targetTypeVals', t)} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Target Subtype Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.targetSubtypeChecked} onChange={e => setExcludeConfig({...excludeConfig, targetSubtypeChecked: e.target.checked})} />
+                  Target Subtype
+                </label>
+                {excludeConfig.targetSubtypeChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 20 }}>
+                    {['Informational', 'Commercial'].map(t => (
+                      <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={excludeConfig.targetSubtypeVals.includes(t)} onChange={() => toggleCheckboxVal('targetSubtypeVals', t)} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Target Geo Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.targetGeoChecked} onChange={e => setExcludeConfig({...excludeConfig, targetGeoChecked: e.target.checked})} />
+                  Target Geo
+                </label>
+                {excludeConfig.targetGeoChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="text"
+                        placeholder="Type geo & click Add..."
+                        value={tempGeoInput}
+                        onChange={e => setTempGeoInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addGeoTag(); } }}
+                        style={{ border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', fontSize: 12, flex: 1 }}
+                      />
+                      <button
+                        onClick={addGeoTag}
+                        style={{ padding: '4px 10px', fontSize: 12, background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {excludeConfig.targetGeoVals.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                        {excludeConfig.targetGeoVals.map(val => (
+                          <span key={val} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--accent-light)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 500 }}>
+                            {val}
+                            <span onClick={() => removeGeoTag(val)} style={{ cursor: 'pointer', fontWeight: 'bold', marginLeft: 2 }}>×</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Priority Exclude */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  <input type="checkbox" checked={excludeConfig.priorityChecked} onChange={e => setExcludeConfig({...excludeConfig, priorityChecked: e.target.checked})} />
+                  Priority
+                </label>
+                {excludeConfig.priorityChecked && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 20 }}>
+                    {['P1', 'P2', 'P3', 'P4', 'P5'].map(p => (
+                      <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={excludeConfig.priorityVals.includes(p)} onChange={() => toggleCheckboxVal('priorityVals', p)} />
+                        {p}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={handleExcludeAction}
+                style={{
+                  background: '#0f1523', color: '#fff', border: 'none', borderRadius: 6,
+                  padding: '8px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  marginTop: 6, textAlign: 'center',
+                }}
+              >
+                Exclude Match
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Robot Face AI Cluster Button */}
+        <button
+          onClick={handleLocalCluster}
+          title="Cluster keywords using AI"
+          style={{
+            background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
+            padding: '4px 8px', borderRadius: 6, transition: 'background 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        >
+          🤖
+        </button>
+
+        {/* Add Keywords Button inside detail view */}
+        <button
+          onClick={onAddKeywords}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: 'var(--surface-2)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8,
+            padding: '7px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'var(--font-body)',
+          }}
+        >
+          <Plus size={14} />
+          Add Keywords
+        </button>
+
         <button
           onClick={handleSave}
           disabled={!hasPendingChanges || saving}
@@ -1800,7 +2346,13 @@ function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCateg
                 {someSelected && <span style={{ width: 8, height: 2, background: '#fff', borderRadius: 1, display: 'block' }} />}
               </div>
             </th>
-            {['KW', 'SV', 'KW Diff', 'Cluster', 'Category'].map((h, i) => (
+            {['KW', 'SV', 'KW Diff'].map((h, i) => (
+              <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h}</th>
+            ))}
+            {showRankColumn && (
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>Rank</th>
+            )}
+            {['Cluster', 'Category'].map((h, i) => (
               <th key={i} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.3px' }}>{h}</th>
             ))}
             <th style={{ padding: '6px 16px', textAlign: 'left' }}>
@@ -1822,13 +2374,13 @@ function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCateg
         </thead>
         <tbody>
           {loading ? (
-            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading keywords…</td></tr>
+            <tr><td colSpan={showRankColumn ? 14 : 13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading keywords…</td></tr>
           ) : error ? (
-            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--red, #dc2626)', fontSize: 13 }}>{error}</td></tr>
+            <tr><td colSpan={showRankColumn ? 14 : 13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--red, #dc2626)', fontSize: 13 }}>{error}</td></tr>
           ) : rows.length === 0 ? (
-            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords added yet. Use Add Keywords to import.</td></tr>
+            <tr><td colSpan={showRankColumn ? 14 : 13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords added yet. Use Add Keywords to import.</td></tr>
           ) : pagedIndices.length === 0 ? (
-            <tr><td colSpan={13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords match "{search}".</td></tr>
+            <tr><td colSpan={showRankColumn ? 14 : 13} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No keywords match "{search}".</td></tr>
           ) : pagedIndices.map(i => {
             const r = rows[i];
             return (
@@ -1852,6 +2404,9 @@ function KwClusterDetailView({ project, onBack, onUpdateKeywords, onRefreshCateg
               <td style={{ padding: '10px 16px', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', maxWidth: 220 }}>{r.kw}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.sv ?? '—'}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.kwDiff ?? '—'}</td>
+              {showRankColumn && (
+                <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.rank ?? '—'}</td>
+              )}
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.cluster || '—'}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>{r.category || '—'}</td>
               <td style={{ padding: '10px 16px', fontSize: 13, color: r.type ? 'var(--text-primary)' : 'var(--text-muted)' }}>{r.type || '—'}</td>
@@ -2469,7 +3024,7 @@ export default function ProjectSetupPage({ tab }) {
         name: data.name,
         domain: data.domain,
         locationIcon: matchedProject?.locationIcon || 'desktop',
-        location: matchedProject?.location || 'Global',
+        location: data.countries && data.countries.length > 0 ? data.countries.join(', ') : (matchedProject?.location || 'Global'),
         totalPages: newRows.length,
         commercialPct: `0/${newRows.length}`,
         blogPages: 0,
@@ -2638,6 +3193,7 @@ export default function ProjectSetupPage({ tab }) {
                 const proj = kwClusters[selectedKwProject];
                 return proj?.categorizationJobId ? checkCategoryJob(proj.categorizationJobId, proj.domain) : undefined;
               }}
+              onAddKeywords={() => setShowAddKeywords(true)}
             />
           ) : activeTab === 'KW Cluster' && <PagesTab pages={kwClusters} onSelectProject={(i) => { setSelectedKwProject(i); setSearch(''); }} loading={kwClustersLoading} error={kwClustersError} />}
           {activeTab === 'Pages' && selectedPageProject !== null ? (
